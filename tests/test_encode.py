@@ -163,7 +163,7 @@ def test_encode_edge_unchanged_status_omitted():
 
 
 def test_encode_skips_edges_with_missing_symbols():
-    """Edges referencing symbols not in the payload are skipped."""
+    """Edges referencing unknown symbols are skipped, but section header emitted."""
     p = Payload(
         tool="test",
         symbols=[
@@ -174,7 +174,10 @@ def test_encode_skips_edges_with_missing_symbols():
         ],
     )
     output = encode(p)
-    assert "## edges" not in output
+    # Section header is emitted (matches Go), but no edge lines beneath it
+    assert "## edges" in output
+    lines_after_edges = output.split("## edges\n")[1]
+    assert lines_after_edges.strip() == ""
 
 
 def test_encode_empty_payload():

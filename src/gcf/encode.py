@@ -56,9 +56,8 @@ def encode(p: Payload) -> str:
             if e.status and e.status != "unchanged":
                 line += f" {e.status}"
             edge_lines.append(line)
-        if edge_lines:
-            parts.append("## edges")
-            parts.extend(edge_lines)
+        parts.append("## edges")
+        parts.extend(edge_lines)
 
     return "\n".join(parts) + "\n"
 
