@@ -27,10 +27,13 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+[project.scripts]
+gcf = "gcf.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/blackwell-systems/gcf-python"
+Documentation = "https://blackwell-systems.github.io/gcf/"
 Specification = "https://github.com/blackwell-systems/gcf"
-"Go Implementation" = "https://github.com/blackwell-systems/gcf-go"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gcf"]

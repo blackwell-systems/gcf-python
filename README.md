@@ -15,9 +15,28 @@ Python implementation of [GCF (Graph Compact Format)](https://github.com/blackwe
 pip install gcf-py
 ```
 
-Zero dependencies. Pure Python. Python 3.9+.
+Zero dependencies. Pure Python. Python 3.9+. Includes CLI.
 
-## Quick Start
+## CLI
+
+```bash
+gcf encode < payload.json    # JSON to GCF
+gcf decode < payload.gcf     # GCF to JSON
+gcf stats  < payload.json    # token comparison with visual bar
+```
+
+```
+Payload: 50 symbols, 20 edges
+
+  JSON  ██████████████████████████████  4,200 tokens
+  GCF   ████████░░░░░░░░░░░░░░░░░░░░░░  1,150 tokens
+
+  Savings: 73% fewer tokens with GCF
+```
+
+## Library
+
+### Quick Start
 
 ```python
 from gcf import encode, Payload, Symbol, Edge
