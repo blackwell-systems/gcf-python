@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gcf-format"
+version = "0.1.0"
+description = "Python implementation of GCF (Graph Compact Format): token-optimized wire format for LLM tool responses"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Blackwell Systems" },
+]
+keywords = ["gcf", "llm", "mcp", "token-efficient", "graph", "wire-format"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/blackwell-systems/gcf-python"
+Specification = "https://github.com/blackwell-systems/gcf"
+"Go Implementation" = "https://github.com/blackwell-systems/gcf-go"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gcf"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
