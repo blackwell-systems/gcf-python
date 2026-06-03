@@ -1,3 +1,8 @@
+<p align="center">
+  <a href="https://github.com/blackwell-systems"><img src="https://raw.githubusercontent.com/blackwell-systems/blackwell-docs-theme/main/badge-trademark.svg" alt="Blackwell Systems"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+</p>
+
 # gcf-python
 
 Python implementation of [GCF (Graph Compact Format)](https://github.com/blackwell-systems/gcf).
@@ -7,7 +12,7 @@ Python implementation of [GCF (Graph Compact Format)](https://github.com/blackwe
 ## Install
 
 ```
-pip install gcf-format
+pip install gcf-py
 ```
 
 Zero dependencies. Pure Python. Python 3.9+.
