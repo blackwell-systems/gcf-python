@@ -114,11 +114,36 @@ output = encode_delta(delta)
 
 81.2% savings on re-queries where the pack changed slightly.
 
+## Generic Encoding
+
+Encode any Python value (not just graph payloads) into GCF tabular format:
+
+```python
+from gcf import encode_generic
+
+output = encode_generic({
+    "employees": [
+        {"id": 1, "name": "Alice", "department": "Engineering", "salary": 95000},
+        {"id": 2, "name": "Bob", "department": "Sales", "salary": 72000},
+    ],
+})
+```
+
+Output:
+```
+## employees [2]{id,name,department,salary}
+1|Alice|Engineering|95000
+2|Bob|Sales|72000
+```
+
+Works on dicts, lists, and primitives. Lists of uniform dicts get tabular rows. Nested dicts use `## key` section headers.
+
 ## API
 
 | Function | Description |
 |----------|-------------|
-| `encode(p: Payload) -> str` | Encode a payload to GCF text |
+| `encode(p: Payload) -> str` | Encode a graph payload to GCF text |
+| `encode_generic(data: Any) -> str` | Encode any value to GCF tabular format |
 | `decode(input_text: str) -> Payload` | Parse GCF text back to a Payload |
 | `encode_with_session(p: Payload, s: Session) -> str` | Encode with session deduplication |
 | `encode_delta(d: DeltaPayload) -> str` | Encode a delta (added/removed only) |
