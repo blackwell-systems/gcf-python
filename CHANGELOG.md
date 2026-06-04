@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.2 (2026-06-04)
+
+- Fix: escape `"` inside quoted strings in `encode_generic`
+- Fix: quote empty strings as `""` per spec
+
 ## v0.1.1 (2026-06-03)
 
 - `encode_generic`: encode arbitrary Python values into GCF tabular format
