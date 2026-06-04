@@ -38,6 +38,7 @@ from .constants import KIND_ABBREV, KIND_EXPAND
 from .decode import DecodeError, decode
 from .delta import encode_delta
 from .encode import encode
+from .generic import encode_generic
 from .session import Session, encode_with_session
 from .types import Components, DeltaPayload, Edge, Payload, Symbol
 
@@ -54,6 +55,7 @@ __all__ = [
     "decode",
     "encode",
     "encode_delta",
+    "encode_generic",
     "encode_with_session",
 ]
 
