@@ -12,7 +12,7 @@ Python implementation of [GCF (Graph Compact Format)](https://github.com/blackwe
 ## Install
 
 ```
-pip install gcf-py
+pip install gcf-python
 ```
 
 Zero dependencies. Pure Python. Python 3.9+. Includes CLI.
