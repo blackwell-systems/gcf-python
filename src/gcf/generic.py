@@ -140,8 +140,9 @@ def _format_value(value: Any) -> str:
     if isinstance(value, (int, float)):
         return str(value)
     s = str(value)
-    if "|" in s or "\n" in s:
-        return f'"{s}"'
+    if "|" in s or "\n" in s or s == "":
+        escaped = s.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
     return s
 
 
