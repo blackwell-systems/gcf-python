@@ -1,5 +1,7 @@
 """GCF decoder: parses GCF text back into a Payload."""
 
+from __future__ import annotations
+
 from .constants import KIND_EXPAND
 from .types import Edge, Payload, Symbol
 

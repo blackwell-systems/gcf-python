@@ -1,5 +1,7 @@
 """GCF encoder: serializes Payload into GCF text format."""
 
+from __future__ import annotations
+
 from .constants import KIND_ABBREV
 from .types import Payload, Symbol
 

@@ -1,5 +1,7 @@
 """Session-based deduplication for GCF encoding."""
 
+from __future__ import annotations
+
 import threading
 
 from .constants import KIND_ABBREV

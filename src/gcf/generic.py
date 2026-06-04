@@ -1,5 +1,7 @@
 """GCF generic encoder: serializes arbitrary Python values into GCF tabular format."""
 
+from __future__ import annotations
+
 from typing import Any
 
 
