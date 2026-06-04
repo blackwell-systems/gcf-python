@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "gcf-py"
+name = "gcf-python"
 version = "0.1.0"
 description = "Python implementation of GCF (Graph Compact Format): token-optimized wire format for LLM tool responses"
 readme = "README.md"
