@@ -59,6 +59,10 @@ def _encode_array(items: list, name: str, lines: list[str], depth: int) -> None:
 
     if _is_uniform_dict_list(items):
         _encode_tabular(items, name, lines, depth)
+    elif all(not isinstance(item, (dict, list)) for item in items):
+        # Primitive array: inline as comma-separated values.
+        vals = ",".join(_format_value(item) for item in items)
+        lines.append(f"{prefix}{name}[{len(items)}]: {vals}")
     else:
         lines.append(f"{prefix}## {name} [{len(items)}]")
         for i, item in enumerate(items):
