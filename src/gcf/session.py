@@ -77,19 +77,25 @@ def encode_with_session(p: Payload, sess: Session | None = None) -> str:
 
     parts: list[str] = []
 
-    # Header with session=true marker.
-    header = (
-        f"GCF tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} "
-        f"symbols={len(p.symbols)} session=true"
-    )
-    if p.pack_root:
-        header += f" pack_root={p.pack_root}"
-    parts.append(header)
-
     # Build local ID mapping for this response.
     local_index: dict[str, int] = {}
     for i, s in enumerate(p.symbols):
         local_index[s.qualified_name] = i
+
+    # Count valid edges.
+    valid_edges = sum(
+        1 for e in p.edges
+        if e.source in local_index and e.target in local_index
+    )
+
+    # Header with session=true marker.
+    header = (
+        f"GCF tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} "
+        f"symbols={len(p.symbols)} edges={valid_edges} session=true"
+    )
+    if p.pack_root:
+        header += f" pack_root={p.pack_root}"
+    parts.append(header)
 
     # Track which symbols are new (need full declaration).
     new_symbols: list[Symbol] = []
@@ -122,7 +128,7 @@ def encode_with_session(p: Payload, sess: Session | None = None) -> str:
 
     # Edges section.
     if p.edges:
-        parts.append("## edges")
+        parts.append(f"## edges [{valid_edges}]")
         for e in p.edges:
             src_idx = local_index.get(e.source)
             tgt_idx = local_index.get(e.target)

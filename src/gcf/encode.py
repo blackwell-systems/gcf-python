@@ -17,16 +17,22 @@ def encode(p: Payload) -> str:
     """
     parts: list[str] = []
 
-    # Header line.
-    header = f"GCF tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} symbols={len(p.symbols)}"
-    if p.pack_root:
-        header += f" pack_root={p.pack_root}"
-    parts.append(header)
-
     # Build symbol index for edge references.
     sym_index: dict[str, int] = {}
     for i, s in enumerate(p.symbols):
         sym_index[s.qualified_name] = i
+
+    # Count valid edges (both endpoints in symbol index).
+    valid_edges = sum(
+        1 for e in p.edges
+        if e.source in sym_index and e.target in sym_index
+    )
+
+    # Header line.
+    header = f"GCF tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} symbols={len(p.symbols)} edges={valid_edges}"
+    if p.pack_root:
+        header += f" pack_root={p.pack_root}"
+    parts.append(header)
 
     # Group symbols by distance.
     groups = _group_by_distance(p.symbols)
@@ -58,7 +64,7 @@ def encode(p: Payload) -> str:
             if e.status and e.status != "unchanged":
                 line += f" {e.status}"
             edge_lines.append(line)
-        parts.append("## edges")
+        parts.append(f"## edges [{len(edge_lines)}]")
         parts.extend(edge_lines)
 
     return "\n".join(parts) + "\n"

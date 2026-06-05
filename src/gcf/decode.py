@@ -51,6 +51,10 @@ def decode(input_text: str) -> Payload:
         # Group header.
         if line.startswith("## "):
             group = line[3:]
+            # Strip bracket suffix: "edges [200]" -> "edges"
+            bracket_idx = group.find(" [")
+            if bracket_idx >= 0:
+                group = group[:bracket_idx]
             in_edges = group == "edges"
             if not in_edges:
                 if group == "targets":

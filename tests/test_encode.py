@@ -32,12 +32,12 @@ def test_encode_basic_payload():
 
     output = encode(p)
     expected = (
-        "GCF tool=context_for_task budget=5000 tokens=1847 symbols=2\n"
+        "GCF tool=context_for_task budget=5000 tokens=1847 symbols=2 edges=1\n"
         "## targets\n"
         "@0 fn pkg.AuthMiddleware 0.78 lsp_resolved\n"
         "## related\n"
         "@1 fn pkg.NewServer 0.54 lsp_resolved\n"
-        "## edges\n"
+        "## edges [1]\n"
         "@0<@1 calls\n"
     )
     assert output == expected
@@ -175,8 +175,9 @@ def test_encode_skips_edges_with_missing_symbols():
     )
     output = encode(p)
     # Section header is emitted (matches Go), but no edge lines beneath it
-    assert "## edges" in output
-    lines_after_edges = output.split("## edges\n")[1]
+    assert "## edges [0]" in output
+    assert "edges=0" in output
+    lines_after_edges = output.split("## edges [0]\n")[1]
     assert lines_after_edges.strip() == ""
 
 
@@ -184,4 +185,4 @@ def test_encode_empty_payload():
     """Empty payload produces only header."""
     p = Payload(tool="test", token_budget=100, tokens_used=0)
     output = encode(p)
-    assert output == "GCF tool=test budget=100 tokens=0 symbols=0\n"
+    assert output == "GCF tool=test budget=100 tokens=0 symbols=0 edges=0\n"

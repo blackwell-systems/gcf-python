@@ -13,7 +13,7 @@ def test_decode_basic_payload():
         "@0 fn pkg.AuthMiddleware 0.78 lsp_resolved\n"
         "## related\n"
         "@1 fn pkg.NewServer 0.54 lsp_resolved\n"
-        "## edges\n"
+        "## edges [1]\n"
         "@0<@1 calls\n"
     )
 
@@ -93,7 +93,7 @@ def test_decode_edge_with_status():
         "## targets\n"
         "@0 fn a.A 0.90 x\n"
         "@1 fn b.B 0.80 x\n"
-        "## edges\n"
+        "## edges [1]\n"
         "@0<@1 calls added\n"
     )
     p = decode(input_text)
@@ -171,7 +171,7 @@ def test_decode_edge_missing_separator():
         "## targets\n"
         "@0 fn a.A 0.90 x\n"
         "@1 fn b.B 0.80 x\n"
-        "## edges\n"
+        "## edges [1]\n"
         "@0@1 calls\n"
     )
     with pytest.raises(DecodeError, match="missing '<' separator"):
@@ -184,7 +184,7 @@ def test_decode_edge_unknown_symbol():
         "GCF tool=test budget=100 tokens=50 symbols=1\n"
         "## targets\n"
         "@0 fn a.A 0.90 x\n"
-        "## edges\n"
+        "## edges [1]\n"
         "@0<@99 calls\n"
     )
     with pytest.raises(DecodeError, match="unknown symbol id"):
