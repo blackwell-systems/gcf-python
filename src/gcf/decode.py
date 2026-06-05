@@ -34,6 +34,9 @@ def decode(input_text: str) -> Payload:
         raise DecodeError(f"invalid header, expected 'GCF ...' got {header!r}")
     _parse_header(header[4:], p)
 
+    if not p.tool:
+        raise DecodeError("header missing required 'tool' field")
+
     # Parse body: symbols and edges.
     symbols: list[Symbol] = []
     sym_by_id: dict[int, Symbol] = {}

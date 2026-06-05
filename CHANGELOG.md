@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.3 (2026-06-04)
+
+- Docs: update README for PyPI discoverability (gcformat.com, proxy, vs-toon links)
+- Fix: decoder rejects headers missing required `tool` field (conformance)
+- Fix: escape newlines as `\n` in quoted strings in `encode_generic`
+
 ## v0.1.2 (2026-06-04)
 
 - Fix: escape `"` inside quoted strings in `encode_generic`

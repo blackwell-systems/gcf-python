@@ -142,7 +142,7 @@ def _format_value(value: Any) -> str:
         return str(value)
     s = str(value)
     if "|" in s or "\n" in s or s == "":
-        escaped = s.replace("\\", "\\\\").replace('"', '\\"')
+        escaped = s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
         return f'"{escaped}"'
     return s
 
