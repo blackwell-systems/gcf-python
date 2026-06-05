@@ -18,6 +18,8 @@ def encode_generic(data: Any) -> str:
     Returns:
         GCF-formatted text string.
     """
+    if data is None or not isinstance(data, (dict, list)):
+        return str(data) if data is not None else "-"
     lines: list[str] = []
     _encode_value(data, lines, depth=0)
     return "\n".join(lines) + "\n" if lines else "\n"
@@ -33,15 +35,16 @@ def _encode_value(value: Any, lines: list[str], depth: int) -> None:
         lines.append(_indent(depth) + _format_value(value))
 
 
-def _encode_dict(d: dict, lines: list[str], depth: int) -> None:
+def _encode_dict(d: dict, lines: list[str], depth: int, name: str | None = None) -> None:
     """Encode a dict into key=value pairs with section headers for nested values."""
     prefix = _indent(depth)
+    if name is not None:
+        lines.append(f"{prefix}## {name}")
     for key, value in d.items():
         if isinstance(value, list):
             _encode_array(value, key, lines, depth)
         elif isinstance(value, dict):
-            lines.append(f"{prefix}## {key}")
-            _encode_dict(value, lines, depth + 1)
+            _encode_dict(value, lines, depth + 1, name=key)
         else:
             lines.append(f"{prefix}{key}={_format_value(value)}")
 
@@ -85,14 +88,12 @@ def _encode_tabular(items: list[dict], name: str, lines: list[str], depth: int) 
 
         if nested_fields:
             lines.append(f"{prefix}@{i} {row_str}")
-            inner_prefix = _indent(depth + 1)
             for nk in nested_fields:
                 nv = item.get(nk)
                 if isinstance(nv, list):
                     _encode_array(nv, nk, lines, depth + 1)
                 elif isinstance(nv, dict):
-                    lines.append(f"{inner_prefix}## {nk}")
-                    _encode_dict(nv, lines, depth + 2)
+                    _encode_dict(nv, lines, depth + 1, name=nk)
         else:
             lines.append(f"{prefix}{row_str}")
 

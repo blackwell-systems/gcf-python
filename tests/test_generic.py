@@ -159,8 +159,8 @@ def test_encode_non_uniform_list():
 
 def test_encode_primitive_value():
     """A bare primitive is encoded directly."""
-    assert encode_generic(42) == "42\n"
-    assert encode_generic("hello") == "hello\n"
+    assert encode_generic(42) == "42"
+    assert encode_generic("hello") == "hello"
 
 
 def test_encode_string_with_pipe():
