@@ -186,11 +186,16 @@ GCF wins on every dataset except deeply nested config (75 tokens on a 618-token 
 
 Reproducible: [blackwell-systems/toon@gcf-comparison](https://github.com/blackwell-systems/toon/tree/gcf-comparison)
 
-## Other Implementations
+## Links
 
-- **Go**: [github.com/blackwell-systems/gcf-go](https://github.com/blackwell-systems/gcf-go)
-- **TypeScript**: [github.com/blackwell-systems/gcf-typescript](https://github.com/blackwell-systems/gcf-typescript)
-- **Specification**: [github.com/blackwell-systems/gcf](https://github.com/blackwell-systems/gcf)
+- [Documentation](https://gcformat.com/)
+- [Playground](https://gcformat.com/playground.html)
+- [Specification](https://github.com/blackwell-systems/gcf)
+- [Go library](https://github.com/blackwell-systems/gcf-go)
+- [TypeScript library](https://github.com/blackwell-systems/gcf-typescript)
+- [MCP Proxy](https://github.com/blackwell-systems/gcf-proxy) (zero-code adoption)
+- [GCF vs TOON](https://gcformat.com/guide/vs-toon.html)
+- [TOON benchmark fork](https://github.com/blackwell-systems/toon/tree/gcf-comparison)
 
 ## License
 
