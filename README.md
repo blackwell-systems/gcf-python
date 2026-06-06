@@ -41,33 +41,21 @@ Payload: 50 symbols, 20 edges
 ### Quick Start
 
 ```python
-from gcf import encode, Payload, Symbol, Edge
+from gcf import encode_generic
 
-p = Payload(
-    tool="context_for_task",
-    token_budget=5000,
-    tokens_used=1847,
-    symbols=[
-        Symbol(qualified_name="pkg.AuthMiddleware", kind="function", score=0.78, provenance="lsp_resolved", distance=0),
-        Symbol(qualified_name="pkg.NewServer", kind="function", score=0.54, provenance="lsp_resolved", distance=1),
+output = encode_generic({
+    "employees": [
+        {"id": 1, "name": "Alice", "department": "Engineering", "salary": 95000},
+        {"id": 2, "name": "Bob", "department": "Sales", "salary": 72000},
     ],
-    edges=[
-        Edge(source="pkg.NewServer", target="pkg.AuthMiddleware", edge_type="calls"),
-    ],
-)
-
-output = encode(p)
+})
 ```
 
 Output:
 ```
-GCF tool=context_for_task budget=5000 tokens=1847 symbols=2 edges=1
-## targets
-@0 fn pkg.AuthMiddleware 0.78 lsp_resolved
-## related
-@1 fn pkg.NewServer 0.54 lsp_resolved
-## edges [1]
-@0<@1 calls
+## employees [2]{id,name,department,salary}
+1|Alice|Engineering|95000
+2|Bob|Sales|72000
 ```
 
 ## Decode
