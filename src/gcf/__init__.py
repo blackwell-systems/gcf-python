@@ -42,12 +42,14 @@ from .generic import encode_generic
 from .session import Session, encode_with_session
 from .decode_generic import decode_generic
 from .stream import StreamEncoder
+from .stream_generic import GenericStreamEncoder
 from .types import Components, DeltaPayload, Edge, Payload, Symbol
 
 __all__ = [
     "Components",
     "DecodeError",
     "DeltaPayload",
+    "GenericStreamEncoder",
     "Edge",
     "KIND_ABBREV",
     "KIND_EXPAND",

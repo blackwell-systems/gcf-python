@@ -2,6 +2,7 @@
 
 ## v0.5.0 (2026-06-06)
 
+- `GenericStreamEncoder`: zero-buffering tabular streaming encode (begin_array/write_row/end_array/write_kv/write_section/write_inline_array)
 - `decode_generic`: decode any GCF text (tabular or graph) back to Python objects
 - `StreamEncoder`: zero-buffering streaming encode (added in v0.4.0)
 
