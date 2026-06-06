@@ -40,6 +40,7 @@ from .delta import encode_delta
 from .encode import encode
 from .generic import encode_generic
 from .session import Session, encode_with_session
+from .stream import StreamEncoder
 from .types import Components, DeltaPayload, Edge, Payload, Symbol
 
 __all__ = [
@@ -51,6 +52,7 @@ __all__ = [
     "KIND_EXPAND",
     "Payload",
     "Session",
+    "StreamEncoder",
     "Symbol",
     "decode",
     "encode",

@@ -94,6 +94,35 @@ out2 = encode_with_session(payload2, sess)  # reused symbols as "@N  # previousl
 
 By the 5th call in a session: 92.7% token savings vs JSON.
 
+## Streaming Encode
+
+Write GCF output incrementally as symbols and edges arrive. Zero buffering, O(1) memory per row:
+
+```python
+from gcf import StreamEncoder, Symbol, Edge
+
+enc = StreamEncoder(sys.stdout, "context_for_task", token_budget=5000)
+
+enc.write_symbol(Symbol(qualified_name="pkg.Auth", kind="function", score=0.95, provenance="lsp", distance=0))
+enc.write_symbol(Symbol(qualified_name="pkg.Server", kind="function", score=0.60, provenance="lsp", distance=1))
+enc.write_edge(Edge(source="pkg.Server", target="pkg.Auth", edge_type="calls"))
+enc.close()  # emits ## _summary trailer
+```
+
+Output:
+```
+GCF tool=context_for_task budget=5000
+## targets
+@0 fn pkg.Auth 0.95 lsp
+## related
+@1 fn pkg.Server 0.60 lsp
+## edges [?]
+@0<@1 calls
+## _summary symbols=2 edges=1 sections=targets:1,related:1,edges:1
+```
+
+The writer is any object with a `write(s: str)` method. Thread-safe. Standard `decode()` handles streaming output with no changes.
+
 ## Delta Encoding
 
 When the consumer already has a prior context pack, send only what changed:
