@@ -26,7 +26,7 @@ class StreamEncoder:
         enc = StreamEncoder(sys.stdout, "context_for_task", token_budget=5000)
         enc.write_symbol(sym1)  # emitted immediately
         enc.write_edge(edge1)   # emitted immediately
-        enc.close()             # emits ## _summary trailer
+        enc.close()             # emits ##! summary trailer
     """
 
     def __init__(
