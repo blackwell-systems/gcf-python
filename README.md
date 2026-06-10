@@ -10,6 +10,7 @@ Python implementation of [GCF](https://gcformat.com/) — the most token-efficie
 **79% fewer input tokens than JSON. 63% fewer output tokens. 90.5% average comprehension accuracy across 10 models and 3 providers (four models hit 100%). 1,300+ LLM evaluations. Zero training.**
 
 Docs: [gcformat.com](https://gcformat.com/) · [Playground](https://gcformat.com/playground.html) · [GCF vs TOON](https://gcformat.com/guide/vs-toon.html)
+- [betterthanjson.com](https://betterthanjson.com)
 
 ## Install
 
@@ -201,6 +202,7 @@ GCF wins all 6 datasets on [TOON's own benchmark](https://github.com/blackwell-s
 - [TypeScript library](https://github.com/blackwell-systems/gcf-typescript)
 - [MCP Proxy](https://github.com/blackwell-systems/gcf-proxy) (zero-code adoption)
 - [GCF vs TOON](https://gcformat.com/guide/vs-toon.html)
+- [betterthanjson.com](https://betterthanjson.com)
 - [TOON benchmark fork](https://github.com/blackwell-systems/toon/tree/gcf-comparison)
 
 ## License
