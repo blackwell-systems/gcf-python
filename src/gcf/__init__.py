@@ -65,4 +65,4 @@ __all__ = [
     "encode_with_session",
 ]
 
-__version__ = "0.1.3"
+__version__ = "1.0.0"
