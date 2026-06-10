@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1 (2026-06-10)
+
+- CLI: `encode-generic` and `decode-generic` subcommands for generic profile
+- CLI now supports both graph and generic profiles
+- `python -m gcf` entry point
+
 ## v1.0.0 (2026-06-10)
 
 SPEC v2.0 implementation. 126/133 conformance fixtures passing (7 skipped: session, delta, binary UTF-8, negative zero, graph encode). 40M property-based round-trips with zero failures.
