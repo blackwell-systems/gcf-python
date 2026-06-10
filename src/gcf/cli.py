@@ -5,19 +5,25 @@ import sys
 
 from .decode import decode
 from .encode import encode
+from .decode_generic import decode_generic
+from .generic import encode_generic
 from .types import Edge, Payload, Symbol
 
 USAGE = """gcf - token-optimized wire format for LLM tool responses
 
 Usage:
-  gcf encode [file]    Encode JSON payload to GCF (stdin if no file)
-  gcf decode [file]    Decode GCF text to JSON (stdin if no file)
-  gcf stats  [file]    Compare token counts: JSON vs GCF (stdin if no file)
-  gcf version          Print version
+  gcf encode          [file]  Encode JSON graph payload to GCF (stdin if no file)
+  gcf decode          [file]  Decode GCF graph text to JSON (stdin if no file)
+  gcf encode-generic  [file]  Encode JSON to GCF generic profile (stdin if no file)
+  gcf decode-generic  [file]  Decode GCF generic text to JSON (stdin if no file)
+  gcf stats           [file]  Compare token counts: JSON vs GCF (stdin if no file)
+  gcf version                 Print version
 
 Examples:
   gcf encode < payload.json
   gcf decode < payload.gcf
+  echo '{"name":"Alice"}' | gcf encode-generic
+  echo 'GCF profile=generic\\nname=Alice' | gcf decode-generic
   gcf stats payload.json
 """
 
@@ -37,11 +43,18 @@ def main() -> None:
     elif cmd == "decode":
         data = _read_input(file_args)
         _do_decode(data)
+    elif cmd == "encode-generic":
+        data = _read_input(file_args)
+        _do_encode_generic(data)
+    elif cmd == "decode-generic":
+        data = _read_input(file_args)
+        _do_decode_generic(data)
     elif cmd == "stats":
         data = _read_input(file_args)
         _do_stats(data)
     elif cmd == "version":
-        print("gcf 0.1.0")
+        from . import __version__
+        print(f"gcf {__version__}")
     else:
         print(f"unknown command: {cmd}\n", file=sys.stderr)
         print(USAGE, file=sys.stderr, end="")
@@ -113,6 +126,20 @@ def _payload_to_json(p: Payload) -> str:
         ],
     }
     return json.dumps(obj, indent=2)
+
+
+def _do_encode_generic(data: str) -> None:
+    try:
+        obj = json.loads(data)
+    except json.JSONDecodeError as e:
+        print(f"error: invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(encode_generic(obj), end="")
+
+
+def _do_decode_generic(data: str) -> None:
+    result = decode_generic(data)
+    print(json.dumps(result))
 
 
 def _do_encode(data: str) -> None:
