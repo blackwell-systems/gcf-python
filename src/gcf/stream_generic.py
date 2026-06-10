@@ -1,8 +1,10 @@
-"""GCF generic streaming encoder: zero-buffering tabular encode to any writable."""
+"""GCF v2.0 generic streaming encoder: zero-buffering tabular encode to any writable."""
 
 from __future__ import annotations
 
 import threading
+
+from .scalar import format_scalar
 from typing import Any, Sequence
 
 
@@ -69,20 +71,14 @@ class GenericStreamEncoder:
             self._w.write(f"{name}[{len(values)}]: {','.join(parts)}\n")
 
     def close(self) -> None:
-        """Emit the ## _summary trailer with final counts."""
+        """Emit the ##! summary trailer with final counts."""
         with self._lock:
             if self._current is not None:
                 self._end_array_locked()
             if not self._sections:
                 return
-            total_rows = 0
-            section_parts: list[str] = []
-            for name, count in self._sections:
-                section_parts.append(f"{name}:{count}")
-                total_rows += count
-            self._w.write(
-                f"## _summary rows={total_rows} sections={','.join(section_parts)}\n"
-            )
+            counts = [str(count) for _, count in self._sections]
+            self._w.write(f"##! summary counts={','.join(counts)}\n")
 
     def _end_array_locked(self) -> None:
         if self._current is None:
@@ -92,20 +88,4 @@ class GenericStreamEncoder:
 
 
 def _format_value(v: Any) -> str:
-    if v is None:
-        return "-"
-    if isinstance(v, bool):
-        return "true" if v else "false"
-    if isinstance(v, int):
-        return str(v)
-    if isinstance(v, float):
-        # Match Go's %g formatting
-        s = f"{v:g}"
-        return s
-    if isinstance(v, str):
-        if v == "":
-            return '""'
-        if "|" in v or "\n" in v:
-            return '"' + v.replace('"', '\\"') + '"'
-        return v
-    return str(v)
+    return format_scalar(v, "|")

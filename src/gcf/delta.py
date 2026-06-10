@@ -21,7 +21,7 @@ def encode_delta(d: DeltaPayload) -> str:
         savings = 100.0 * (1.0 - d.delta_tokens / d.full_tokens)
 
     parts.append(
-        f"GCF tool={d.tool} delta=true base_root={d.base_root} "
+        f"GCF profile=graph tool={d.tool} delta=true base_root={d.base_root} "
         f"new_root={d.new_root} tokens={d.delta_tokens} savings={savings:.0f}%"
     )
 

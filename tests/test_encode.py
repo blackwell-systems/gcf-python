@@ -32,7 +32,7 @@ def test_encode_basic_payload():
 
     output = encode(p)
     expected = (
-        "GCF tool=context_for_task budget=5000 tokens=1847 symbols=2 edges=1\n"
+        "GCF profile=graph tool=context_for_task budget=5000 tokens=1847 symbols=2 edges=1\n"
         "## targets\n"
         "@0 fn pkg.AuthMiddleware 0.78 lsp_resolved\n"
         "## related\n"
@@ -185,4 +185,4 @@ def test_encode_empty_payload():
     """Empty payload produces only header."""
     p = Payload(tool="test", token_budget=100, tokens_used=0)
     output = encode(p)
-    assert output == "GCF tool=test budget=100 tokens=0 symbols=0 edges=0\n"
+    assert output == "GCF profile=graph tool=test budget=100 tokens=0 symbols=0 edges=0\n"

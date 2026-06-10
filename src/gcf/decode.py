@@ -35,7 +35,11 @@ def decode(input_text: str) -> Payload:
     _parse_header(header[4:], p)
 
     if not p.tool:
-        raise DecodeError("header missing required 'tool' field")
+        raise DecodeError("missing_tool: header missing required 'tool' field")
+
+    # Detect delta mode.
+    is_delta = "delta=true" in header
+    valid_delta_sections = {"removed", "added", "edges_removed", "edges_added"}
 
     # Parse body: symbols and edges.
     symbols: list[Symbol] = []
@@ -48,6 +52,10 @@ def decode(input_text: str) -> Payload:
         if not line:
             continue
 
+        # Skip ##! summary trailer.
+        if line.startswith("##! "):
+            continue
+
         # Group header.
         if line.startswith("## "):
             group = line[3:]
@@ -55,6 +63,8 @@ def decode(input_text: str) -> Payload:
             bracket_idx = group.find(" [")
             if bracket_idx >= 0:
                 group = group[:bracket_idx]
+            if is_delta and group not in valid_delta_sections:
+                raise DecodeError(f"malformed_delta: invalid delta section {group!r}")
             in_edges = group == "edges"
             if not in_edges:
                 if group == "targets":
@@ -113,19 +123,19 @@ def _parse_header(fields: str, p: Payload) -> None:
 def _parse_symbol_line(line: str, distance: int) -> tuple[Symbol, int]:
     """Parse a symbol line into a Symbol and its local ID."""
     if not line.startswith("@"):
-        raise DecodeError(f"expected symbol line starting with @, got {line!r}")
+        raise DecodeError(f"invalid_node_line: expected symbol line starting with @, got {line!r}")
 
     parts = line.split()
     if len(parts) < 5:
         raise DecodeError(
-            f"symbol line needs at least 5 fields, got {len(parts)} in {line!r}"
+            f"invalid_node_line: symbol line needs at least 5 fields, got {len(parts)} in {line!r}"
         )
 
     id_str = parts[0][1:]  # strip @
     try:
         sym_id = int(id_str)
     except ValueError as e:
-        raise DecodeError(f"invalid symbol id {id_str!r}: {e}") from e
+        raise DecodeError(f"invalid_symbol_id: invalid symbol id {id_str!r}: {e}") from e
 
     kind = parts[1]
     kind = KIND_EXPAND.get(kind, kind)
@@ -135,7 +145,7 @@ def _parse_symbol_line(line: str, distance: int) -> tuple[Symbol, int]:
     try:
         score = float(parts[3])
     except ValueError as e:
-        raise DecodeError(f"invalid score {parts[3]!r}: {e}") from e
+        raise DecodeError(f"invalid_score: invalid score {parts[3]!r}: {e}") from e
 
     provenance = parts[4]
 
@@ -157,7 +167,7 @@ def _parse_edge_line(line: str, sym_by_id: dict[int, Symbol]) -> Edge:
     ref = parts[0]
     lt_idx = ref.find("<")
     if lt_idx < 0:
-        raise DecodeError(f"edge line missing '<' separator in {ref!r}")
+        raise DecodeError(f"invalid_edge_syntax: edge line missing '<' separator in {ref!r}")
 
     target_id_str = ref[1:lt_idx]  # strip leading @
     source_id_str = ref[lt_idx + 2:]  # strip <@
@@ -176,7 +186,7 @@ def _parse_edge_line(line: str, sym_by_id: dict[int, Symbol]) -> Edge:
     source_sym = sym_by_id.get(source_id)
     if target_sym is None or source_sym is None:
         raise DecodeError(
-            f"edge references unknown symbol id(s): target={target_id} source={source_id}"
+            f"unknown_edge_reference: edge references unknown symbol id(s): target={target_id} source={source_id}"
         )
 
     edge_type = parts[1]

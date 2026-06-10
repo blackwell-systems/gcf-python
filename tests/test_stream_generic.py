@@ -19,7 +19,7 @@ def test_tabular():
     out = buf.getvalue()
     assert "## employees [?]{id,name,department,salary}" in out
     assert "1|Alice|Engineering|95000" in out
-    assert "## _summary rows=3 sections=employees:3" in out
+    assert "##! summary counts=3" in out
 
 
 def test_kv_and_inline_array():
@@ -67,7 +67,7 @@ def test_multiple_arrays():
     enc.close()
 
     out = buf.getvalue()
-    assert "sections=users:2,roles:1" in out
+    assert "counts=2,1" in out
 
 
 def test_null_and_bool():
@@ -108,7 +108,7 @@ def test_auto_close_on_begin_array():
     enc.close()
 
     out = buf.getvalue()
-    assert "sections=first:1,second:1" in out
+    assert "counts=1,1" in out
 
 
 def test_write_section():
@@ -123,4 +123,4 @@ def test_write_section():
 
     out = buf.getvalue()
     assert "## metadata" in out
-    assert "## _summary rows=1 sections=items:1" in out
+    assert "##! summary counts=1" in out

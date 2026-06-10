@@ -60,13 +60,13 @@ def test_encode_mixed_data():
     }
     output = encode_generic(data)
 
-    # Header lists only primitive fields.
-    assert "## projects [2]{name,status}" in output
-    # Rows with nested data get @id prefix.
-    assert "@0 Alpha|active" in output
-    assert "@1 Beta|draft" in output
-    # Nested config values are indented.
-    assert "## config" in output
+    # Header includes all fields (v2.0: nested fields in union too).
+    assert "## projects [2]{name,status,config}" in output
+    # Rows with nested data get @id prefix and ^ marker.
+    assert "@0 Alpha|active|^" in output
+    assert "@1 Beta|draft|^" in output
+    # Nested config uses .field {} attachment.
+    assert ".config {}" in output
     assert "env=" in output
     assert "region=" in output
 
@@ -144,7 +144,7 @@ def test_encode_empty_list():
 
 
 def test_encode_non_uniform_list():
-    """Non-uniform list items get @N indices without tabular headers."""
+    """All-object arrays use tabular form with field union (v2.0)."""
     data = {
         "things": [
             {"a": 1},
@@ -152,15 +152,15 @@ def test_encode_non_uniform_list():
         ],
     }
     output = encode_generic(data)
-    assert "## things [2]" in output
-    assert "@0" in output
-    assert "@1" in output
+    assert "## things [2]{a,completely,keys}" in output
+    assert "1|~|~" in output
+    assert "~|different|true" in output
 
 
 def test_encode_primitive_value():
-    """A bare primitive is encoded directly."""
-    assert encode_generic(42) == "42"
-    assert encode_generic("hello") == "hello"
+    """A bare primitive is encoded as root scalar (v2.0)."""
+    assert encode_generic(42) == "GCF profile=generic\n=42\n"
+    assert encode_generic("hello") == "GCF profile=generic\n=hello\n"
 
 
 def test_encode_string_with_pipe():

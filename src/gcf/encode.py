@@ -29,7 +29,7 @@ def encode(p: Payload) -> str:
     )
 
     # Header line.
-    header = f"GCF tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} symbols={len(p.symbols)} edges={valid_edges}"
+    header = f"GCF profile=graph tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} symbols={len(p.symbols)} edges={valid_edges}"
     if p.pack_root:
         header += f" pack_root={p.pack_root}"
     parts.append(header)

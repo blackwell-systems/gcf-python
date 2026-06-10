@@ -8,7 +8,7 @@ from gcf import DecodeError, decode
 def test_decode_basic_payload():
     """Decode a valid GCF payload with symbols and edges."""
     input_text = (
-        "GCF tool=context_for_task budget=5000 tokens=1847 symbols=2\n"
+        "GCF profile=graph tool=context_for_task budget=5000 tokens=1847 symbols=2\n"
         "## targets\n"
         "@0 fn pkg.AuthMiddleware 0.78 lsp_resolved\n"
         "## related\n"
@@ -38,7 +38,7 @@ def test_decode_basic_payload():
 
 def test_decode_with_pack_root():
     """Decode extracts pack_root from header."""
-    input_text = "GCF tool=test budget=100 tokens=50 symbols=0 pack_root=abc123\n"
+    input_text = "GCF profile=graph tool=test budget=100 tokens=50 symbols=0 pack_root=abc123\n"
     p = decode(input_text)
     assert p.pack_root == "abc123"
 
@@ -46,7 +46,7 @@ def test_decode_with_pack_root():
 def test_decode_kind_expansion():
     """Decode expands abbreviated kinds to full names."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=3\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=3\n"
         "## targets\n"
         "@0 iface pkg.Handler 0.90 lsp_resolved\n"
         "@1 route pkg.GetUsers 0.80 ast_inferred\n"
@@ -61,7 +61,7 @@ def test_decode_kind_expansion():
 def test_decode_unknown_kind_passthrough():
     """Unknown abbreviated kinds are kept as-is."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=1\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=1\n"
         "## targets\n"
         "@0 custom pkg.X 0.50 test\n"
     )
@@ -72,7 +72,7 @@ def test_decode_unknown_kind_passthrough():
 def test_decode_distance_groups():
     """Decode assigns correct distance from group headers."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=3\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=3\n"
         "## targets\n"
         "@0 fn a.A 0.90 x\n"
         "## related\n"
@@ -89,7 +89,7 @@ def test_decode_distance_groups():
 def test_decode_edge_with_status():
     """Decode captures edge status field."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=2\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=2\n"
         "## targets\n"
         "@0 fn a.A 0.90 x\n"
         "@1 fn b.B 0.80 x\n"
@@ -103,7 +103,7 @@ def test_decode_edge_with_status():
 def test_decode_ignores_comments():
     """Comments are skipped during parsing."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=1\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=1\n"
         "# This is a comment\n"
         "## targets\n"
         "# Another comment\n"
@@ -116,7 +116,7 @@ def test_decode_ignores_comments():
 def test_decode_tolerates_crlf():
     """Decoder handles CRLF line endings."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=1\r\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=1\r\n"
         "## targets\r\n"
         "@0 fn a.A 0.90 x\r\n"
     )
@@ -134,7 +134,7 @@ def test_decode_invalid_header():
 def test_decode_invalid_symbol_id():
     """Decode raises DecodeError for non-numeric symbol ID."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=1\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=1\n"
         "## targets\n"
         "@abc fn a.A 0.90 x\n"
     )
@@ -145,7 +145,7 @@ def test_decode_invalid_symbol_id():
 def test_decode_invalid_score():
     """Decode raises DecodeError for non-numeric score."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=1\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=1\n"
         "## targets\n"
         "@0 fn a.A notanumber x\n"
     )
@@ -156,7 +156,7 @@ def test_decode_invalid_score():
 def test_decode_symbol_line_too_few_fields():
     """Decode raises DecodeError when symbol line has fewer than 5 fields."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=1\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=1\n"
         "## targets\n"
         "@0 fn a.A\n"
     )
@@ -167,7 +167,7 @@ def test_decode_symbol_line_too_few_fields():
 def test_decode_edge_missing_separator():
     """Decode raises DecodeError when edge line lacks < separator."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=2\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=2\n"
         "## targets\n"
         "@0 fn a.A 0.90 x\n"
         "@1 fn b.B 0.80 x\n"
@@ -181,7 +181,7 @@ def test_decode_edge_missing_separator():
 def test_decode_edge_unknown_symbol():
     """Decode raises DecodeError when edge references unknown symbol ID."""
     input_text = (
-        "GCF tool=test budget=100 tokens=50 symbols=1\n"
+        "GCF profile=graph tool=test budget=100 tokens=50 symbols=1\n"
         "## targets\n"
         "@0 fn a.A 0.90 x\n"
         "## edges [1]\n"

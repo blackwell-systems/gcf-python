@@ -15,14 +15,14 @@ def test_stream_basic():
     enc.close()
 
     out = buf.getvalue()
-    assert "GCF tool=context_for_task budget=5000\n" in out
+    assert "GCF profile=graph tool=context_for_task budget=5000\n" in out
     assert "## targets\n" in out
     assert "@0 fn pkg.Auth 0.78 lsp_resolved\n" in out
     assert "## related\n" in out
     assert "@1 fn pkg.Server 0.54 lsp_resolved\n" in out
     assert "## edges [?]\n" in out
     assert "@0<@1 calls\n" in out
-    assert "## _summary symbols=2 edges=1" in out
+    assert "##! summary symbols=2 edges=1" in out
 
     # Header should not have symbols= or edges=
     header = out.split("\n")[0]
@@ -74,7 +74,7 @@ def test_stream_multiple_groups():
     assert "## related\n" in out
     assert "## extended\n" in out
     assert "## distance_5\n" in out
-    assert "sections=targets:1,related:1,extended:1,distance_5:1" in out
+    assert "counts=1,1,1,1" in out
 
 
 def test_stream_skips_unknown_refs():

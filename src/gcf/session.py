@@ -90,7 +90,7 @@ def encode_with_session(p: Payload, sess: Session | None = None) -> str:
 
     # Header with session=true marker.
     header = (
-        f"GCF tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} "
+        f"GCF profile=graph tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} "
         f"symbols={len(p.symbols)} edges={valid_edges} session=true"
     )
     if p.pack_root:

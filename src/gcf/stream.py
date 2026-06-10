@@ -49,7 +49,7 @@ class StreamEncoder:
         self._edges_started = False
 
         # Emit header immediately.
-        parts = [f"GCF tool={tool}"]
+        parts = [f"GCF profile=graph tool={tool}"]
         if token_budget:
             parts.append(f"budget={token_budget}")
         if tokens_used:
@@ -120,24 +120,24 @@ class StreamEncoder:
             self._group_counts[group_name] = self._group_counts.get(group_name, 0) + 1
 
     def close(self) -> None:
-        """Emit ## _summary trailer with final counts."""
+        """Emit ##! summary trailer with final counts."""
         with self._lock:
-            sections: list[str] = []
+            counts: list[str] = []
             group_order = ["targets", "related", "extended"]
 
             for g in group_order:
                 c = self._group_counts.get(g, 0)
                 if c > 0:
-                    sections.append(f"{g}:{c}")
+                    counts.append(str(c))
             for g, c in self._group_counts.items():
                 if g not in group_order and c > 0:
-                    sections.append(f"{g}:{c}")
+                    counts.append(str(c))
             if self._edge_count > 0:
-                sections.append(f"edges:{self._edge_count}")
+                counts.append(str(self._edge_count))
 
             self._w.write(
-                f"## _summary symbols={self._next_id} edges={self._edge_count}"
-                f" sections={','.join(sections)}\n"
+                f"##! summary symbols={self._next_id} edges={self._edge_count}"
+                f" counts={','.join(counts)}\n"
             )
 
     @property
