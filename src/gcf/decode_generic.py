@@ -435,9 +435,7 @@ def _parse_tabular_body(
             while i < len(lines) and len(attachment_values) < len(all_att_fields):
                 a_line = lines[i]
                 a_content: str | None = None
-                if a_line.startswith(ind + "  "):
-                    a_content = a_line[len(ind) + 2:]
-                elif depth == 0 or a_line.startswith(ind):
+                if depth == 0 or a_line.startswith(ind):
                     a_content = a_line[len(ind):] if depth > 0 else a_line
                 else:
                     break
