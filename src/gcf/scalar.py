@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 _JSON_NUMBER_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
-_NUMERIC_LIKE_RE = re.compile(r"^[+-]?\.?\d")
+_NUMERIC_LIKE_RE = re.compile(r"^[+-]\.?\d|^\.\d|^0\d")
 _BARE_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
@@ -38,7 +38,7 @@ def needs_quote(s: str) -> bool:
         return True
     for c in s:
         o = ord(c)
-        if c in ('"', "\\", "|", ",") or o < 0x20 or c in ("\n", "\r"):
+        if c in ('"', "\\", "|") or o < 0x20 or c in ("\n", "\r"):
             return True
         # C1 control characters
         if 0x80 <= o <= 0x9F:

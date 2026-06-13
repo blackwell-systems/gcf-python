@@ -528,41 +528,6 @@ def _parse_tabular_body(
     return rows, i - start
 
 
-def _parse_attachment(
-    lines: list[str], line_idx: int, rest: str, depth: int
-) -> tuple[str, Any, int]:
-    if rest and rest[0] == '"':
-        close_idx = -1
-        j = 1
-        while j < len(rest):
-            if rest[j] == "\\":
-                j += 2
-                continue
-            if rest[j] == '"':
-                close_idx = j
-                break
-            j += 1
-        if close_idx < 0:
-            raise ValueError("unterminated_quote")
-        name = parse_quoted_string(rest[:close_idx + 1])
-        after_name = rest[close_idx + 1:].lstrip()
-    else:
-        sp = rest.find(" ")
-        if sp < 0:
-            raise ValueError(f"invalid attachment: {rest}")
-        name = rest[:sp]
-        after_name = rest[sp:].lstrip()
-
-    if after_name.startswith("{}"):
-        nested: dict[str, Any] = {}
-        consumed = _parse_object_body(lines, line_idx + 1, depth, nested)
-        return name, nested, consumed + 1
-    if after_name.startswith("["):
-        arr, consumed = _parse_array_from_header(lines, line_idx, depth, after_name)
-        return name, arr, consumed
-    raise ValueError(f"invalid attachment form: {after_name}")
-
-
 def _parse_expanded_body(
     lines: list[str], start: int, depth: int
 ) -> tuple[list[Any], int]:
