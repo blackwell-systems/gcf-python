@@ -1,4 +1,4 @@
-"""GCF v2.0 generic decoder: parses GCF generic or graph profile text back to Python objects."""
+"""GCF generic generic decoder: parses GCF generic or graph profile text back to Python objects."""
 
 from __future__ import annotations
 
@@ -269,12 +269,101 @@ def _find_closing_brace(s: str) -> int:
     return -1
 
 
+def _parse_attachment_name(rest: str) -> tuple[str, str]:
+    if rest and rest[0] == '"':
+        j = 1
+        while j < len(rest):
+            if rest[j] == "\\":
+                j += 2
+                continue
+            if rest[j] == '"':
+                name = parse_quoted_string(rest[:j + 1])
+                return name, rest[j + 1:]
+            j += 1
+        return "", rest
+    sp = rest.find(" ")
+    if sp >= 0:
+        return rest[:sp], rest[sp:]
+    return rest, ""
+
+
+def _parse_attachment(
+    lines: list[str], line_idx: int, rest: str, depth: int, shared_schemas: dict[str, list[str]]
+) -> tuple[str, Any, int, list[str] | None]:
+    """Returns (name, value, consumed, parsed_fields)."""
+    name, after_name = _parse_attachment_name(rest)
+    if not name and not rest.startswith('""'):
+        raise ValueError(f"invalid attachment: {rest}")
+    after_name = after_name.lstrip()
+
+    if after_name.startswith("{}"):
+        nested: dict[str, Any] = {}
+        consumed = _parse_object_body(lines, line_idx + 1, depth, nested)
+        return name, nested, consumed + 1, None
+
+    if after_name.startswith("["):
+        cb = after_name.find("]")
+        if cb < 0:
+            raise ValueError("invalid_count: missing ]")
+        after_close = after_name[cb + 1:]
+
+        # [N]{fields}: has its own schema.
+        if after_close.startswith("{"):
+            end_brace = _find_closing_brace(after_close)
+            parsed_fields: list[str] | None = None
+            if end_brace >= 0:
+                try:
+                    parsed_fields = split_field_decl(after_close[:end_brace + 1])
+                except Exception:
+                    pass
+            arr, consumed = _parse_array_from_header(lines, line_idx, depth, after_name)
+            return name, arr, consumed, parsed_fields
+
+        # [N]: inline primitive array: don't use shared schema.
+        if after_close.startswith(": ") or after_close == ":":
+            arr, consumed = _parse_array_from_header(lines, line_idx, depth, after_name)
+            return name, arr, consumed, None
+
+        # [N] without {fields}: check for shared schema.
+        if name in shared_schemas:
+            sf = shared_schemas[name]
+            count_str = after_name[1:cb]
+            count = -1 if count_str == "?" else int(count_str)
+            if count == 0:
+                return name, [], 1, None
+            # Peek: if next line starts with @, it's expanded.
+            use_shared = True
+            next_idx = line_idx + 1
+            ind = "  " * depth
+            if next_idx < len(lines):
+                nc = lines[next_idx]
+                if depth > 0 and nc.startswith(ind):
+                    nc = nc[len(ind):]
+                if nc.lstrip().startswith("@"):
+                    use_shared = False
+            if use_shared:
+                rows, consumed = _parse_tabular_body(lines, line_idx + 1, depth, sf, count)
+                if count >= 0 and len(rows) != count:
+                    raise ValueError(f"count_mismatch: declared {count}, got {len(rows)}")
+                return name, rows, consumed + 1, None
+
+        # No shared schema: standard parsing.
+        arr, consumed = _parse_array_from_header(lines, line_idx, depth, after_name)
+        return name, arr, consumed, None
+
+    raise ValueError(f"invalid attachment form: {after_name}")
+
+
 def _parse_tabular_body(
     lines: list[str], start: int, depth: int, fields: list[str], expected_count: int
 ) -> tuple[list[Any], int]:
     ind = "  " * depth
     rows: list[Any] = []
     i = start
+
+    # Track inline schemas and shared array schemas.
+    inline_schemas: dict[str, list[str]] = {}
+    shared_array_schemas: dict[str, list[str]] = {}
 
     while i < len(lines):
         line = lines[i]
@@ -286,54 +375,137 @@ def _parse_tabular_body(
         if content and content[0] == " ":
             trimmed = content.lstrip()
             if trimmed.startswith("."):
-                raise ValueError(f"orphan_attachment: {trimmed}")
+                break
             break
 
+        # Strip @N prefix (must be @digits).
         row_data = content
         row_has_id = False
         if row_data.startswith("@"):
             sp = row_data.find(" ")
             if sp > 0:
-                row_data = row_data[sp + 1:]
-                row_has_id = True
+                id_str = row_data[1:sp]
+                if id_str.isdigit():
+                    row_data = row_data[sp + 1:]
+                    row_has_id = True
 
         vals = split_respecting_quotes(row_data, "|")
         if len(vals) != len(fields):
             raise ValueError(f"row_width_mismatch: expected {len(fields)}, got {len(vals)}")
 
+        # Parse cells.
         cell_values: dict[str, Any] = {}
-        attachment_fields: list[str] = []
+        traditional_att_fields: list[str] = []
+        inline_att_fields: list[str] = []
+        inline_att_order: list[str] = []
         missing_fields: set[str] = set()
+
         for j, f in enumerate(fields):
-            parsed = parse_scalar(vals[j], tabular_context=True)
+            cell_val = vals[j]
+
+            # Check for ^{fields} inline schema declaration.
+            if cell_val.startswith("^{") and cell_val.endswith("}"):
+                schema_str = cell_val[1:]
+                ifs = split_field_decl(schema_str)
+                inline_schemas[f] = ifs
+                inline_att_fields.append(f)
+                inline_att_order.append(f)
+                continue
+
+            parsed = parse_scalar(cell_val, tabular_context=True)
             if parsed is MISSING:
                 missing_fields.add(f)
             elif parsed is ATTACHMENT:
-                attachment_fields.append(f)
+                if f in inline_schemas:
+                    inline_att_fields.append(f)
+                    inline_att_order.append(f)
+                else:
+                    traditional_att_fields.append(f)
             else:
                 cell_values[f] = parsed
         i += 1
 
+        # Parse attachments in line order.
+        all_att_fields = traditional_att_fields + inline_att_fields
         attachment_values: dict[str, Any] = {}
-        if row_has_id and attachment_fields:
-            att_indent = ind + "  "
-            while i < len(lines):
-                al = lines[i]
-                if not al.startswith(att_indent):
+
+        if row_has_id and all_att_fields:
+            inline_idx = 0
+
+            while i < len(lines) and len(attachment_values) < len(all_att_fields):
+                a_line = lines[i]
+                a_content: str | None = None
+                if a_line.startswith(ind + "  "):
+                    a_content = a_line[len(ind) + 2:]
+                elif depth == 0 or a_line.startswith(ind):
+                    a_content = a_line[len(ind):] if depth > 0 else a_line
+                else:
                     break
-                ac = al[len(att_indent):]
-                if not ac.startswith("."):
+                if a_content is None:
                     break
-                name, val, consumed = _parse_attachment(lines, i, ac[1:], depth + 2)
-                if name in attachment_values:
-                    raise ValueError(f"duplicate_attachment: {name}")
-                attachment_values[name] = val
-                i += consumed
-            for f in attachment_fields:
+
+                # Line starts with ".": traditional or prefixed inline.
+                if a_content.startswith("."):
+                    rest = a_content[1:]
+                    att_name, after_name = _parse_attachment_name(rest)
+                    after_name_stripped = after_name.lstrip()
+
+                    # Prefixed inline data.
+                    ifs = inline_schemas.get(att_name)
+                    if ifs and not after_name_stripped.startswith("{}") and not after_name_stripped.startswith("["):
+                        inline_vals = split_respecting_quotes(after_name_stripped, "|")
+                        if len(inline_vals) != len(ifs):
+                            raise ValueError(f"inline_width_mismatch: {att_name} expected {len(ifs)}, got {len(inline_vals)}")
+                        obj: dict[str, Any] = {}
+                        for k, inf in enumerate(ifs):
+                            p = parse_scalar(inline_vals[k], tabular_context=True)
+                            if p is not MISSING:
+                                obj[inf] = p
+                        attachment_values[att_name] = obj
+                        i += 1
+                        continue
+
+                    # Traditional attachment.
+                    att_name_t, att_val, consumed, parsed_fields = _parse_attachment(
+                        lines, i, rest, depth + 2, shared_array_schemas
+                    )
+                    if not rows and parsed_fields:
+                        shared_array_schemas[att_name_t] = parsed_fields
+                    attachment_values[att_name_t] = att_val
+                    i += consumed
+                    continue
+
+                # No-prefix line: positional inline data.
+                found_inline = False
+                next_inline_field = ""
+                while inline_idx < len(inline_att_order):
+                    candidate = inline_att_order[inline_idx]
+                    if candidate not in attachment_values:
+                        next_inline_field = candidate
+                        found_inline = True
+                        break
+                    inline_idx += 1
+                if not found_inline:
+                    break
+
+                ifs = inline_schemas[next_inline_field]
+                inline_vals = split_respecting_quotes(a_content, "|")
+                if len(inline_vals) != len(ifs):
+                    raise ValueError(f"inline_width_mismatch: {next_inline_field} expected {len(ifs)}, got {len(inline_vals)}")
+                obj = {}
+                for k, inf in enumerate(ifs):
+                    p = parse_scalar(inline_vals[k], tabular_context=True)
+                    if p is not MISSING:
+                        obj[inf] = p
+                attachment_values[next_inline_field] = obj
+                inline_idx += 1
+                i += 1
+
+            for f in all_att_fields:
                 if f not in attachment_values:
                     raise ValueError(f"missing_attachment: {f}")
 
-        if not row_has_id or not attachment_fields:
+        if not row_has_id or not all_att_fields:
             att_indent = ind + "  "
             if i < len(lines) and lines[i].startswith(att_indent):
                 peek = lines[i][len(att_indent):]

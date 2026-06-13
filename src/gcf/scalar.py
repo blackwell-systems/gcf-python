@@ -34,11 +34,17 @@ def needs_quote(s: str) -> bool:
         return True
     if s[0] == " " or s[-1] == " ":
         return True
-    if s[0] in ("#", "@"):
+    if s[0] in ("#", "@", "."):
         return True
     for c in s:
         o = ord(c)
         if c in ('"', "\\", "|", ",") or o < 0x20 or c in ("\n", "\r"):
+            return True
+        # C1 control characters
+        if 0x80 <= o <= 0x9F:
+            return True
+        # Unicode whitespace beyond ASCII
+        if o > 0x7F and o in (0xA0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF) or (0x2000 <= o <= 0x200A):
             return True
     return False
 
