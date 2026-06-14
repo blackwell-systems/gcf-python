@@ -442,6 +442,10 @@ def _parse_tabular_body(
                 if a_content is None:
                     break
 
+                # Handle v2 indented attachments: strip one extra indent level.
+                if not a_content.startswith(".") and a_content.startswith("  ."):
+                    a_content = a_content[2:]
+
                 # Line starts with ".": traditional or prefixed inline.
                 if a_content.startswith("."):
                     rest = a_content[1:]
@@ -459,6 +463,8 @@ def _parse_tabular_body(
                             p = parse_scalar(inline_vals[k], tabular_context=True)
                             if p is not MISSING:
                                 obj[inf] = p
+                        if att_name in attachment_values:
+                            raise ValueError(f"duplicate_attachment: {att_name}")
                         attachment_values[att_name] = obj
                         i += 1
                         continue
@@ -469,6 +475,8 @@ def _parse_tabular_body(
                     )
                     if not rows and parsed_fields:
                         shared_array_schemas[att_name_t] = parsed_fields
+                    if att_name_t in attachment_values:
+                        raise ValueError(f"duplicate_attachment: {att_name_t}")
                     attachment_values[att_name_t] = att_val
                     i += consumed
                     continue
@@ -502,6 +510,19 @@ def _parse_tabular_body(
             for f in all_att_fields:
                 if f not in attachment_values:
                     raise ValueError(f"missing_attachment: {f}")
+
+            # Check for extra attachment lines after all fields resolved (duplicate).
+            if i < len(lines):
+                extra_line = lines[i]
+                extra_content = ""
+                if depth == 0 or extra_line.startswith(ind):
+                    extra_content = extra_line[len(ind):] if depth > 0 else extra_line
+                if not extra_content.startswith(".") and extra_content.startswith("  ."):
+                    extra_content = extra_content[2:]
+                if extra_content.startswith("."):
+                    extra_name, _ = _parse_attachment_name(extra_content[1:])
+                    if extra_name in attachment_values:
+                        raise ValueError(f"duplicate_attachment: {extra_name}")
 
         if not row_has_id or not all_att_fields:
             att_indent = ind + "  "

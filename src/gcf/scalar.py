@@ -38,7 +38,7 @@ def needs_quote(s: str) -> bool:
         return True
     for c in s:
         o = ord(c)
-        if c in ('"', "\\", "|") or o < 0x20 or c in ("\n", "\r"):
+        if c in ('"', "\\", "|", ",") or o < 0x20 or c in ("\n", "\r"):
             return True
         # C1 control characters
         if 0x80 <= o <= 0x9F:
