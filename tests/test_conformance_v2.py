@@ -97,6 +97,16 @@ def test_conformance(rel_path, data):
             _json_norm(data["expected"]), _json_norm(got)
         ), f"decode mismatch:\n  got: {got}\n  exp: {data['expected']}"
 
+    elif op == "roundtrip":
+        # Encode, verify GCF output matches expected, then decode and verify round-trip.
+        got = encode_generic(data["input"])
+        if isinstance(data["expected"], str):
+            assert got == data["expected"], f"encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
+        decoded = decode_generic(got)
+        assert _structural_equal(
+            _json_norm(data["input"]), _json_norm(decoded)
+        ), f"round-trip mismatch:\n  input:   {data['input']}\n  decoded: {decoded}"
+
     elif op == "error":
         # v3 decoder may surface different error categories for same invalid input.
         # The requirement is that it rejects.
