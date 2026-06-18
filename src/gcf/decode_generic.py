@@ -151,6 +151,17 @@ def _parse_object_body(
             i += consumed
             continue
 
+        # Key=value. Check before inline array so bracket patterns in quoted
+        # values (e.g. text="ERR[404]: Not Found") are not misinterpreted.
+        eq_idx = _find_kv_split(content)
+        if eq_idx > 0:
+            name = _parse_key_from_header(content[:eq_idx])
+            _check_dup(out, name)
+            out[name] = parse_scalar(content[eq_idx + 1:])
+            i += 1
+            continue
+
+        # Inline array (e.g. items[3]: a,b,c). Only reached if no = found.
         if not content.startswith("@") and not content.startswith("##"):
             bracket_idx = content.find("[")
             if bracket_idx > 0:
@@ -165,14 +176,6 @@ def _parse_object_body(
                         out[name] = arr
                         i += 1
                         continue
-
-        eq_idx = _find_kv_split(content)
-        if eq_idx > 0:
-            name = _parse_key_from_header(content[:eq_idx])
-            _check_dup(out, name)
-            out[name] = parse_scalar(content[eq_idx + 1:])
-            i += 1
-            continue
 
         i += 1
     return i - start
@@ -191,7 +194,13 @@ def _find_kv_split(s: str) -> int:
                 return i + 1 if i + 1 < len(s) and s[i + 1] == "=" else -1
             i += 1
         return -1
-    return s.find("=")
+    eq_idx = s.find("=")
+    if eq_idx < 0:
+        return -1
+    bracket_idx = s.find("[")
+    if bracket_idx >= 0 and bracket_idx < eq_idx:
+        return -1
+    return eq_idx
 
 
 def _parse_key_from_header(s: str) -> str:

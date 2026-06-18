@@ -8,6 +8,7 @@ from typing import Any
 
 _JSON_NUMBER_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
 _NUMERIC_LIKE_RE = re.compile(r"^[+-]\.?\d|^\.\d|^0\d")
+_INLINE_ARRAY_RE = re.compile(r"\[[^\]]*\]\s*:")
 _BARE_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
@@ -35,6 +36,8 @@ def needs_quote(s: str) -> bool:
     if s[0] == " " or s[-1] == " ":
         return True
     if s[0] in ("#", "@", "."):
+        return True
+    if _INLINE_ARRAY_RE.search(s):
         return True
     for c in s:
         o = ord(c)
