@@ -2,42 +2,55 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from .scalar import format_scalar, format_key
 
 
-def encode_generic(data: Any) -> str:
+@dataclass
+class GenericOptions:
+    """Options for controlling generic encoding behavior."""
+    no_flatten: bool = False
+    """When True, disables promotion of fixed-shape nested objects to path
+    columns (e.g. "customer>name"). Nested objects use attachment syntax
+    instead. Set when targeting open-weight models that show lower
+    comprehension on flattened encoding."""
+
+
+def encode_generic(data: Any, opts: GenericOptions | None = None) -> str:
+    if opts is None:
+        opts = GenericOptions()
     out: list[str] = ["GCF profile=generic"]
-    _encode_root_value(data, out)
+    _encode_root_value(data, out, opts)
     return "\n".join(out) + "\n"
 
 
-def _encode_root_value(v: Any, out: list[str]) -> None:
+def _encode_root_value(v: Any, out: list[str], opts: GenericOptions) -> None:
     if v is None:
         out.append("=-")
     elif isinstance(v, dict):
-        _encode_object(v, out, 0)
+        _encode_object(v, out, 0, opts)
     elif isinstance(v, list):
-        _encode_root_array(v, out)
+        _encode_root_array(v, out, opts)
     else:
         out.append(f"={format_scalar(v)}")
 
 
-def _encode_object(d: dict, out: list[str], depth: int) -> None:
+def _encode_object(d: dict, out: list[str], depth: int, opts: GenericOptions) -> None:
     prefix = _indent(depth)
     for key, value in d.items():
         fk = format_key(key)
         if isinstance(value, dict):
             out.append(f"{prefix}## {fk}")
-            _encode_object(value, out, depth + 1)
+            _encode_object(value, out, depth + 1, opts)
         elif isinstance(value, list):
-            _encode_named_array(fk, value, out, depth)
+            _encode_named_array(fk, value, out, depth, opts)
         else:
             out.append(f"{prefix}{fk}={format_scalar(value)}")
 
 
-def _encode_root_array(arr: list, out: list[str]) -> None:
+def _encode_root_array(arr: list, out: list[str], opts: GenericOptions) -> None:
     if not arr:
         out.append("## [0]")
         return
@@ -47,12 +60,12 @@ def _encode_root_array(arr: list, out: list[str]) -> None:
         return
     fields = _tabular_fields(arr)
     if fields is not None:
-        _encode_tabular("## ", arr, fields, out, 0)
+        _encode_tabular("## ", arr, fields, out, 0, opts)
         return
-    _encode_expanded("## ", arr, out, 0)
+    _encode_expanded("## ", arr, out, 0, opts)
 
 
-def _encode_named_array(name: str, arr: list, out: list[str], depth: int) -> None:
+def _encode_named_array(name: str, arr: list, out: list[str], depth: int, opts: GenericOptions) -> None:
     prefix = _indent(depth)
     if not arr:
         out.append(f"{prefix}## {name} [0]")
@@ -63,9 +76,9 @@ def _encode_named_array(name: str, arr: list, out: list[str], depth: int) -> Non
         return
     fields = _tabular_fields(arr)
     if fields is not None:
-        _encode_tabular(f"{prefix}## {name} ", arr, fields, out, depth)
+        _encode_tabular(f"{prefix}## {name} ", arr, fields, out, depth, opts)
         return
-    _encode_expanded(f"{prefix}## {name} ", arr, out, depth)
+    _encode_expanded(f"{prefix}## {name} ", arr, out, depth, opts)
 
 
 def _tabular_fields(arr: list) -> list[str] | None:
@@ -152,6 +165,9 @@ def _analyze_flattenable(
     arr: list[dict], field_name: str, parent_path: str
 ) -> list[dict] | None:
     """Analyze whether a field can be flattened. Returns list of leaf descriptors or None."""
+    # Field names containing ">" cannot be flattened (would create ambiguous paths).
+    if ">" in field_name:
+        return None
     canonical_shape: dict[str, str] | None = None  # key -> "scalar" | "nested"
 
     for item in arr:
@@ -249,25 +265,38 @@ def _resolve_key_chain(item: Any, keys: list[str]) -> tuple[Any, bool]:
 
 
 def _encode_tabular(
-    header_prefix: str, arr: list[dict], fields: list[str], out: list[str], depth: int
+    header_prefix: str, arr: list[dict], fields: list[str], out: list[str], depth: int, opts: GenericOptions
 ) -> None:
     prefix = _indent(depth)
 
     # Phase 0: Analyze fields for flattening.
     flatten_map: dict[str, list[dict]] = {}
-    for f in fields:
-        leaves = _analyze_flattenable(arr, f, "")
-        if leaves and len(leaves) > 0:
-            flatten_map[f] = leaves
+    if not opts.no_flatten:
+        for f in fields:
+            leaves = _analyze_flattenable(arr, f, "")
+            if leaves and len(leaves) > 0:
+                flatten_map[f] = leaves
+
+    # Fields whose names contain ">" must not appear as tabular columns
+    # because the decoder would interpret them as flattened path columns.
+    # Track them for per-row attachment emission (spec rule 7.4.6.1.4).
+    gt_fields = {f for f in fields if f not in flatten_map and ">" in f}
 
     # Build expanded column list.
     columns: list[dict] = []
     for f in fields:
+        if f in gt_fields:
+            continue
         if f in flatten_map:
             for leaf in flatten_map[f]:
                 columns.append({"header": format_key(leaf["path"]), "type": "flat", "field": f, "keys": leaf["keys"]})
         else:
             columns.append({"header": format_key(f), "type": "original", "field": f, "keys": []})
+
+    # If all fields were excluded (all contain ">"), fall back to expanded.
+    if not columns:
+        _encode_expanded(header_prefix, arr, out, depth, opts)
+        return
 
     # Pre-compute inline schemas and shared array schemas (skip flattened fields).
     inline_schemas: dict[str, list[str]] = {}
@@ -333,6 +362,15 @@ def _encode_tabular(
             else:
                 cells.append(format_scalar(v, "|"))
 
+        # Emit fields with ">" in their names as per-row attachments.
+        for f in fields:
+            if f not in gt_fields:
+                continue
+            if f not in item:
+                continue
+            row_has_attachment = True
+            attachments.append((f, item[f], False, None))
+
         row = "|".join(cells)
         if row_has_attachment:
             out.append(f"{prefix}@{i} {row}")
@@ -351,17 +389,25 @@ def _encode_tabular(
             elif isinstance(att_val, list):
                 sas = shared_arr_schemas.get(att_name)
                 if sas and i > 0:
-                    _encode_attachment_array_shared(prefix, fk, att_val, out, depth + 2, sas)
+                    _encode_attachment_array_shared(prefix, fk, att_val, out, depth + 2, sas, opts)
                 else:
-                    _encode_attachment_array(prefix, fk, att_val, out, depth + 2)
+                    _encode_attachment_array(prefix, fk, att_val, out, depth + 2, opts)
             elif isinstance(att_val, dict):
                 out.append(f"{prefix}.{fk} {{}}")
-                _encode_object(att_val, out, depth + 2)
+                _encode_object(att_val, out, depth + 2, opts)
+            else:
+                # Scalar attachment (e.g. field names containing ">").
+                if att_val is None:
+                    out.append(f"{prefix}.{fk} =-")
+                else:
+                    out.append(f"{prefix}.{fk} ={format_scalar(att_val)}")
 
 
 def _encode_attachment_array(
-    att_prefix: str, fk: str, arr: list, out: list[str], depth: int
+    att_prefix: str, fk: str, arr: list, out: list[str], depth: int, opts: GenericOptions | None = None
 ) -> None:
+    if opts is None:
+        opts = GenericOptions()
     if not arr:
         out.append(f"{att_prefix}.{fk} [0]")
     elif _all_primitives(arr):
@@ -370,13 +416,13 @@ def _encode_attachment_array(
     else:
         fields = _tabular_fields(arr)
         if fields is not None:
-            _encode_tabular(f"{att_prefix}.{fk} ", arr, fields, out, depth)
+            _encode_tabular(f"{att_prefix}.{fk} ", arr, fields, out, depth, opts)
         else:
-            _encode_expanded(f"{att_prefix}.{fk} ", arr, out, depth)
+            _encode_expanded(f"{att_prefix}.{fk} ", arr, out, depth, opts)
 
 
 def _encode_attachment_array_shared(
-    att_prefix: str, fk: str, arr: list, out: list[str], depth: int, shared_fields: list[str]
+    att_prefix: str, fk: str, arr: list, out: list[str], depth: int, shared_fields: list[str], opts: GenericOptions | None = None
 ) -> None:
     if not arr:
         out.append(f"{att_prefix}.{fk} [0]")
@@ -403,25 +449,29 @@ def _encode_attachment_array_shared(
             out.append(f"{prefix}{'|'.join(cells)}")
     else:
         # Fields don't match: fall back to full encoding.
-        _encode_attachment_array(att_prefix, fk, arr, out, depth)
+        _encode_attachment_array(att_prefix, fk, arr, out, depth, opts)
 
 
-def _encode_expanded(header_prefix: str, arr: list, out: list[str], depth: int) -> None:
+def _encode_expanded(header_prefix: str, arr: list, out: list[str], depth: int, opts: GenericOptions | None = None) -> None:
+    if opts is None:
+        opts = GenericOptions()
     prefix = _indent(depth)
     out.append(f"{header_prefix}[{len(arr)}]")
     for i, item in enumerate(arr):
         if isinstance(item, dict):
             out.append(f"{prefix}@{i} {{}}")
-            _encode_object(item, out, depth + 1)
+            _encode_object(item, out, depth + 1, opts)
         elif isinstance(item, list):
-            _encode_expanded_array_item(prefix, i, item, out, depth)
+            _encode_expanded_array_item(prefix, i, item, out, depth, opts)
         else:
             out.append(f"{prefix}@{i} ={format_scalar(item)}")
 
 
 def _encode_expanded_array_item(
-    prefix: str, idx: int, arr: list, out: list[str], depth: int
+    prefix: str, idx: int, arr: list, out: list[str], depth: int, opts: GenericOptions | None = None
 ) -> None:
+    if opts is None:
+        opts = GenericOptions()
     if not arr:
         out.append(f"{prefix}@{idx} [0]")
     elif _all_primitives(arr):
@@ -430,9 +480,9 @@ def _encode_expanded_array_item(
     else:
         fields = _tabular_fields(arr)
         if fields is not None:
-            _encode_tabular(f"{prefix}@{idx} ", arr, fields, out, depth + 1)
+            _encode_tabular(f"{prefix}@{idx} ", arr, fields, out, depth + 1, opts)
         else:
-            _encode_expanded(f"{prefix}@{idx} ", arr, out, depth + 1)
+            _encode_expanded(f"{prefix}@{idx} ", arr, out, depth + 1, opts)
 
 
 def _all_primitives(arr: list) -> bool:

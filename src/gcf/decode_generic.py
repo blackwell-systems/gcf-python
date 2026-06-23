@@ -360,6 +360,14 @@ def _parse_attachment(
         arr, consumed = _parse_array_from_header(lines, line_idx, depth, after_name)
         return name, arr, consumed, None
 
+    # Scalar: =value (field names containing ">" excluded from tabular columns).
+    if after_name.startswith("="):
+        val_str = after_name[1:]
+        parsed = parse_scalar(val_str, tabular_context=True)
+        if parsed is MISSING:
+            return name, None, 1, None
+        return name, parsed, 1, None
+
     raise ValueError(f"invalid attachment form: {after_name}")
 
 
@@ -423,7 +431,11 @@ def _parse_tabular_body(
     path_column_map: dict[str, list[str]] = {}
     for f in fields:
         if ">" in f:
-            path_column_map[f] = f.split(">")
+            parts = f.split(">")
+            # Only treat as a path column if all segments are non-empty.
+            # A literal key like ">" would split into ["", ""].
+            if all(p for p in parts):
+                path_column_map[f] = parts
 
     # Track inline schemas and shared array schemas.
     inline_schemas: dict[str, list[str]] = {}
@@ -506,10 +518,10 @@ def _parse_tabular_body(
         all_att_fields = traditional_att_fields + inline_att_fields
         attachment_values: dict[str, Any] = {}
 
-        if row_has_id and all_att_fields:
+        if row_has_id:
             inline_idx = 0
 
-            while i < len(lines) and len(attachment_values) < len(all_att_fields):
+            while i < len(lines):
                 a_line = lines[i]
                 a_content: str | None = None
                 if depth == 0 or a_line.startswith(ind):
@@ -601,13 +613,6 @@ def _parse_tabular_body(
                     if extra_name in attachment_values:
                         raise ValueError(f"duplicate_attachment: {extra_name}")
 
-        if not row_has_id or not all_att_fields:
-            att_indent = ind + "  "
-            if i < len(lines) and lines[i].startswith(att_indent):
-                peek = lines[i][len(att_indent):]
-                if peek.startswith("."):
-                    raise ValueError(f"orphan_attachment: {peek}")
-
         row: dict[str, Any] = {}
         for f in fields:
             if f in missing_fields:
@@ -616,6 +621,10 @@ def _parse_tabular_body(
                 row[f] = cell_values[f]
             elif f in attachment_values:
                 row[f] = attachment_values[f]
+        # Also add any orphan attachment values (fields excluded from column list, e.g. ">" fields).
+        for k, v in attachment_values.items():
+            if k not in row:
+                row[k] = v
         # Unflatten path columns into nested objects.
         if path_column_map:
             nested = _unflatten_paths(path_column_map, flat_values, flat_absent)

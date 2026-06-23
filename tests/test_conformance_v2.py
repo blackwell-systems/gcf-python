@@ -98,9 +98,9 @@ def test_conformance(rel_path, data):
         ), f"decode mismatch:\n  got: {got}\n  exp: {data['expected']}"
 
     elif op == "roundtrip":
-        # Encode, verify GCF output matches expected, then decode and verify round-trip.
+        # Encode, verify GCF output matches expected (if provided), then decode and verify round-trip.
         got = encode_generic(data["input"])
-        if isinstance(data["expected"], str):
+        if "expected" in data and isinstance(data["expected"], str):
             assert got == data["expected"], f"encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
         decoded = decode_generic(got)
         assert _structural_equal(

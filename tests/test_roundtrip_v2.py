@@ -7,7 +7,7 @@ import string
 
 import pytest
 
-from gcf import encode_generic, decode_generic
+from gcf import encode_generic, decode_generic, GenericOptions
 
 ITERATIONS = int(os.environ.get("GCF_ITERATIONS", "100000"))
 
@@ -55,7 +55,7 @@ def _gen_number(r):
     ])()
 
 
-SPECIAL = ' |,="\\#@\n\t~^+-.'
+SPECIAL = ' |,="\\#@\n\t~^+-.>'
 BARE = string.ascii_letters + string.digits
 
 
@@ -218,29 +218,31 @@ def test_random_roundtrip():
     r = _rng(42)
     for i in range(ITERATIONS):
         val = _gen_value(r, 0, 4)
-        gcf = encode_generic(val)
-        decoded = decode_generic(gcf)
-        a = _json_norm(val)
-        b = _json_norm(decoded)
-        assert _structural_equal(a, b), (
-            f"iteration {i}: round-trip mismatch\n"
-            f"  input:   {json.dumps(val)}\n"
-            f"  decoded: {json.dumps(decoded)}\n"
-            f"  gcf:     {gcf!r}"
-        )
+        for no_flatten in (False, True):
+            gcf = encode_generic(val, GenericOptions(no_flatten=no_flatten))
+            decoded = decode_generic(gcf)
+            a = _json_norm(val)
+            b = _json_norm(decoded)
+            assert _structural_equal(a, b), (
+                f"iteration {i} no_flatten={no_flatten}: round-trip mismatch\n"
+                f"  input:   {json.dumps(val)}\n"
+                f"  decoded: {json.dumps(decoded)}\n"
+                f"  gcf:     {gcf!r}"
+            )
 
 
 def test_adversarial_roundtrip():
     r = _rng(99)
     for i in range(ITERATIONS):
         val = _gen_adversarial_value(r, 0, 3)
-        gcf = encode_generic(val)
-        decoded = decode_generic(gcf)
-        a = _json_norm(val)
-        b = _json_norm(decoded)
-        assert _structural_equal(a, b), (
-            f"iteration {i}: round-trip mismatch\n"
-            f"  input:   {json.dumps(val)}\n"
-            f"  decoded: {json.dumps(decoded)}\n"
-            f"  gcf:     {gcf!r}"
-        )
+        for no_flatten in (False, True):
+            gcf = encode_generic(val, GenericOptions(no_flatten=no_flatten))
+            decoded = decode_generic(gcf)
+            a = _json_norm(val)
+            b = _json_norm(decoded)
+            assert _structural_equal(a, b), (
+                f"iteration {i} no_flatten={no_flatten}: round-trip mismatch\n"
+                f"  input:   {json.dumps(val)}\n"
+                f"  decoded: {json.dumps(decoded)}\n"
+                f"  gcf:     {gcf!r}"
+            )

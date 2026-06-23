@@ -1,6 +1,7 @@
 """Tests for GCF generic encoding."""
 
-from gcf import encode_generic
+import pytest
+from gcf import encode_generic, decode_generic, GenericOptions
 
 
 def test_encode_flat_tabular_list():
@@ -164,3 +165,52 @@ def test_encode_string_with_pipe():
     data = {"val": "a|b"}
     output = encode_generic(data)
     assert 'val="a|b"' in output
+
+
+def test_no_flatten_option():
+    """noFlatten produces attachment syntax instead of path columns."""
+    data = {
+        "orders": [
+            {"id": "ORD-1", "customer": {"name": "Alice", "email": "alice@co.com"}, "total": 99.99},
+            {"id": "ORD-2", "customer": {"name": "Bob", "email": "bob@co.com"}, "total": 49.99},
+        ],
+    }
+    with_flatten = encode_generic(data)
+    assert "customer>" in with_flatten
+
+    no_flatten = encode_generic(data, GenericOptions(no_flatten=True))
+    assert "customer>" not in no_flatten
+    assert ".customer" in no_flatten
+
+    # Both round-trip.
+    assert decode_generic(with_flatten) == data
+    assert decode_generic(no_flatten) == data
+
+
+GT_EDGE_CASES = [
+    ("literal > key", [{">": 1}, {">": 2}]),
+    ("> at start", [{">foo": "a", "id": 1}, {">foo": "b", "id": 2}]),
+    ("> at end", [{"foo>": "a", "id": 1}, {"foo>": "b", "id": 2}]),
+    ("double >>", [{"a>>b": "x"}, {"a>>b": "y"}]),
+    ("multiple > in key", [{"a>b>c": "x"}, {"a>b>c": "y"}]),
+    ("> field with null", [{"a>b": None, "id": 1}, {"a>b": "hello", "id": 2}]),
+    ("> field with object", [{"a>b": {"x": 1}, "id": 1}, {"a>b": {"x": 2}, "id": 2}]),
+    ("> field with array", [{"a>b": [1, 2], "id": 1}, {"a>b": [3], "id": 2}]),
+    ("all fields have >", [{">": 1, "a>b": 2}, {">": 3, "a>b": 4}]),
+    ("mix of > literal and flattened", [
+        {"id": 1, "x>y": "lit", "nested": {"a": "v1", "b": "v2"}},
+        {"id": 2, "x>y": "lit2", "nested": {"a": "v3", "b": "v4"}},
+    ]),
+    ("> field absent in some rows", [{"id": 1, "a>b": "present"}, {"id": 2}]),
+    ("key looks like flattened path", [{"id": 1, "customer>name": "Alice"}, {"id": 2, "customer>name": "Bob"}]),
+]
+
+
+@pytest.mark.parametrize("name,data", GT_EDGE_CASES)
+def test_gt_field_edge_cases(name, data):
+    """Field names containing > round-trip correctly in both flatten modes."""
+    for no_flatten in (False, True):
+        opts = GenericOptions(no_flatten=no_flatten)
+        encoded = encode_generic(data, opts)
+        decoded = decode_generic(encoded)
+        assert decoded == data, f"{name} (no_flatten={no_flatten}): round-trip mismatch\n  gcf: {encoded!r}"
