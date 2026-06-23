@@ -363,12 +363,67 @@ def _parse_attachment(
     raise ValueError(f"invalid attachment form: {after_name}")
 
 
+def _unflatten_paths(
+    path_columns: dict[str, list[str]],
+    flat_values: dict[str, Any],
+    flat_absent: set[str],
+) -> dict[str, Any]:
+    """Reconstruct nested objects from flat > path columns."""
+    groups: dict[str, list[str]] = {}
+    group_order: list[str] = []
+    for field_name, paths in path_columns.items():
+        if not paths:
+            continue
+        top = paths[0]
+        if top not in groups:
+            groups[top] = []
+            group_order.append(top)
+        groups[top].append(field_name)
+
+    result: dict[str, Any] = {}
+
+    for top in group_order:
+        field_names = groups[top]
+        all_absent = all(f in flat_absent for f in field_names)
+        all_null = all(
+            (f not in flat_absent and flat_values.get(f) is None)
+            for f in field_names
+        )
+
+        if all_absent:
+            continue
+        if all_null:
+            result[top] = None
+            continue
+
+        for field_name in field_names:
+            if field_name in flat_absent:
+                continue
+            paths = path_columns[field_name]
+            val = flat_values.get(field_name)
+
+            current = result
+            for k in paths[:-1]:
+                if k not in current:
+                    current[k] = {}
+                current = current[k]
+            current[paths[-1]] = val
+
+    return result
+
+
 def _parse_tabular_body(
     lines: list[str], start: int, depth: int, fields: list[str], expected_count: int
 ) -> tuple[list[Any], int]:
     ind = "  " * depth
     rows: list[Any] = []
     i = start
+
+    # Detect path columns: fields containing ">".
+    path_column_map: dict[str, list[str]] = {}
+    for f in fields:
+        if ">" in f:
+            path_column_map[f] = f.split(">")
 
     # Track inline schemas and shared array schemas.
     inline_schemas: dict[str, list[str]] = {}
@@ -409,8 +464,21 @@ def _parse_tabular_body(
         inline_att_order: list[str] = []
         missing_fields: set[str] = set()
 
+        # Collect path column values for unflattening.
+        flat_values: dict[str, Any] = {}
+        flat_absent: set[str] = set()
+
         for j, f in enumerate(fields):
             cell_val = vals[j]
+
+            # Path columns: store values for later unflattening.
+            if f in path_column_map:
+                parsed = parse_scalar(cell_val, tabular_context=True)
+                if parsed is MISSING:
+                    flat_absent.add(f)
+                else:
+                    flat_values[f] = parsed
+                continue
 
             # Check for ^{fields} inline schema declaration.
             if cell_val.startswith("^{") and cell_val.endswith("}"):
@@ -548,6 +616,11 @@ def _parse_tabular_body(
                 row[f] = cell_values[f]
             elif f in attachment_values:
                 row[f] = attachment_values[f]
+        # Unflatten path columns into nested objects.
+        if path_column_map:
+            nested = _unflatten_paths(path_column_map, flat_values, flat_absent)
+            row.update(nested)
+
         rows.append(row)
 
         if expected_count >= 0 and len(rows) >= expected_count:

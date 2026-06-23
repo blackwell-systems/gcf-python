@@ -60,15 +60,11 @@ def test_encode_mixed_data():
     }
     output = encode_generic(data)
 
-    # Header includes all fields (v2.0: nested fields in union too).
-    assert "## projects [2]{name,status,config}" in output
-    # Rows with nested data get @id prefix and ^ marker.
-    assert "@0 Alpha|active|^" in output
-    assert "@1 Beta|draft|^" in output
-    # Nested config uses .field {} attachment.
-    assert ".config {}" in output
-    assert "env=" in output
-    assert "region=" in output
+    # Header includes flattened path columns (v3.2).
+    assert '## projects [2]{name,status,"config>env","config>region"}' in output
+    # Rows with flattened data are pure tabular.
+    assert "Alpha|active|prod|us-east" in output
+    assert "Beta|draft|staging|eu-west" in output
 
 
 def test_encode_none_value():

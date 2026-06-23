@@ -145,15 +145,136 @@ def _shared_array_schema(arr: list[dict], field_name: str) -> list[str] | None:
     return canonical_fields
 
 
+# ── Nested object flattening (v3.2) ──────────────────────────────────────
+
+
+def _analyze_flattenable(
+    arr: list[dict], field_name: str, parent_path: str
+) -> list[dict] | None:
+    """Analyze whether a field can be flattened. Returns list of leaf descriptors or None."""
+    canonical_shape: dict[str, str] | None = None  # key -> "scalar" | "nested"
+
+    for item in arr:
+        if field_name not in item or item[field_name] is None:
+            continue
+        v = item[field_name]
+        if not isinstance(v, dict):
+            return None
+        if isinstance(v, list):
+            return None
+
+        keys = list(v.keys())
+
+        if canonical_shape is None:
+            canonical_shape = {}
+            for k in keys:
+                if ">" in k:
+                    return None
+                val = v[k]
+                if isinstance(val, list):
+                    return None
+                elif isinstance(val, dict):
+                    canonical_shape[k] = "nested"
+                else:
+                    canonical_shape[k] = "scalar"
+        else:
+            if len(keys) != len(canonical_shape):
+                return None
+            for k in keys:
+                if k not in canonical_shape:
+                    return None
+                val = v[k]
+                expected = canonical_shape[k]
+                if expected == "scalar":
+                    if isinstance(val, (dict, list)):
+                        return None
+                elif expected == "nested":
+                    if isinstance(val, list):
+                        return None
+                    if val is not None and not isinstance(val, dict):
+                        return None
+
+    if canonical_shape is None:
+        return None
+
+    current_path = f"{parent_path}>{field_name}" if parent_path else field_name
+    parent_keys = parent_path.split(">") + [field_name] if parent_path else [field_name]
+
+    leaves: list[dict] = []
+    for k in canonical_shape:
+        if canonical_shape[k] == "scalar":
+            leaves.append({"path": f"{current_path}>{k}", "keys": parent_keys + [k]})
+        else:
+            sub_arr = []
+            for item in arr:
+                if field_name not in item or item[field_name] is None:
+                    sub_arr.append({})
+                else:
+                    sub_arr.append(item[field_name])
+            sub_leaves = _analyze_flattenable(sub_arr, k, current_path)
+            if sub_leaves is None or len(sub_leaves) == 0:
+                return None
+            leaves.extend(sub_leaves)
+
+    # Guard: reject if any row has non-null object with all-null leaves.
+    if leaves:
+        for item in arr:
+            if field_name not in item or item[field_name] is None:
+                continue
+            all_null = all(
+                _resolve_key_chain(item, leaf["keys"])[0] is None
+                and _resolve_key_chain(item, leaf["keys"])[1]
+                for leaf in leaves
+            )
+            if all_null:
+                return None
+
+    return leaves
+
+
+def _resolve_key_chain(item: Any, keys: list[str]) -> tuple[Any, bool]:
+    """Traverse an object by key chain. Returns (value, exists)."""
+    if not keys or not isinstance(item, dict):
+        return None, False
+    if keys[0] not in item:
+        return None, False
+    current = item[keys[0]]
+    if current is None:
+        return None, True
+    for k in keys[1:]:
+        if not isinstance(current, dict) or k not in current:
+            return None, False
+        current = current[k]
+    return current, True
+
+
 def _encode_tabular(
     header_prefix: str, arr: list[dict], fields: list[str], out: list[str], depth: int
 ) -> None:
     prefix = _indent(depth)
 
-    # Pre-compute inline schemas and shared array schemas.
+    # Phase 0: Analyze fields for flattening.
+    flatten_map: dict[str, list[dict]] = {}
+    for f in fields:
+        leaves = _analyze_flattenable(arr, f, "")
+        if leaves and len(leaves) > 0:
+            flatten_map[f] = leaves
+
+    # Build expanded column list.
+    columns: list[dict] = []
+    for f in fields:
+        if f in flatten_map:
+            for leaf in flatten_map[f]:
+                columns.append({"header": format_key(leaf["path"]), "type": "flat", "field": f, "keys": leaf["keys"]})
+        else:
+            columns.append({"header": format_key(f), "type": "original", "field": f, "keys": []})
+
+    # Pre-compute inline schemas and shared array schemas (skip flattened fields).
     inline_schemas: dict[str, list[str]] = {}
     shared_arr_schemas: dict[str, list[str]] = {}
     for f in fields:
+        if f in flatten_map:
+            continue
         ifs = _inline_schema_fields(arr, f)
         if ifs is not None:
             inline_schemas[f] = ifs
@@ -161,15 +282,34 @@ def _encode_tabular(
         if sas is not None:
             shared_arr_schemas[f] = sas
 
-    fmt_fields = ",".join(format_key(f) for f in fields)
-    out.append(f"{header_prefix}[{len(arr)}]{{{fmt_fields}}}")
+    header_fields = ",".join(col["header"] for col in columns)
+    out.append(f"{header_prefix}[{len(arr)}]{{{header_fields}}}")
 
     for i, item in enumerate(arr):
         cells: list[str] = []
-        attachments: list[tuple[str, Any, bool, list[str] | None]] = []  # (name, value, inline, inline_fields)
+        attachments: list[tuple[str, Any, bool, list[str] | None]] = []
         row_has_attachment = False
 
-        for f in fields:
+        for col in columns:
+            if col["type"] == "flat":
+                keys = col["keys"]
+                if keys[0] not in item:
+                    cells.append("~")
+                else:
+                    top_val = item[keys[0]]
+                    if top_val is None:
+                        cells.append("-")
+                    else:
+                        val, exists = _resolve_key_chain(item, keys)
+                        if not exists:
+                            cells.append("~")
+                        elif val is None:
+                            cells.append("-")
+                        else:
+                            cells.append(format_scalar(val, "|"))
+                continue
+
+            f = col["field"]
             if f not in item:
                 cells.append("~")
                 continue
