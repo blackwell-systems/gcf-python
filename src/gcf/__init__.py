@@ -36,7 +36,7 @@ Specification: https://github.com/blackwell-systems/gcf
 
 from .constants import KIND_ABBREV, KIND_EXPAND
 from .decode import DecodeError, decode
-from .delta import encode_delta
+from .delta import encode_delta, encode_delta_with_session
 from .encode import encode
 from .generic import encode_generic, GenericOptions
 from .session import Session, encode_with_session
@@ -61,6 +61,7 @@ __all__ = [
     "decode_generic",
     "encode",
     "encode_delta",
+    "encode_delta_with_session",
     "encode_generic",
     "GenericOptions",
     "encode_with_session",
