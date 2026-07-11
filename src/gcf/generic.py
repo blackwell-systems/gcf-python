@@ -171,7 +171,15 @@ def _analyze_flattenable(
     canonical_shape: dict[str, str] | None = None  # key -> "scalar" | "nested"
 
     for item in arr:
-        if field_name not in item or item[field_name] is None:
+        if field_name not in item:
+            continue
+        # A nested (non-top-level) null cannot be flattened losslessly: its leaves
+        # would encode as absent ("~") and unflatten back to a missing key, not None.
+        # Bail to the attachment path. A top-level None is fine (emits "-" and
+        # reconstructs via the all-null rule), so just skip the row from shape analysis.
+        if item[field_name] is None:
+            if parent_path != "":
+                return None
             continue
         v = item[field_name]
         if not isinstance(v, dict):

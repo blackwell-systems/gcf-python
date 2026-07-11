@@ -214,6 +214,80 @@ def _structural_equal(a, b):
     return a == b
 
 
+def _gen_flat_shape(r, depth, max_depth):
+    """A fixed nested schema: the string "scalar" or a dict of named sub-shapes."""
+    if depth >= max_depth or r.random() < 0.45:
+        return "scalar"
+    shape = {}
+    for _ in range(1 + r.randint(0, 2)):
+        shape[_gen_bare_key(r)] = _gen_flat_shape(r, depth + 1, max_depth)
+    return shape if shape else "scalar"
+
+
+def _materialize_flat_shape(r, shape):
+    if shape == "scalar":
+        return _gen_scalar(r)
+    obj = {}
+    for k, s in shape.items():
+        # A nested sub-object is sometimes None (intermediate null — the case the
+        # pre-fix encoder dropped) instead of a full object.
+        obj[k] = None if s != "scalar" and r.random() < 0.3 else _materialize_flat_shape(r, s)
+    return obj
+
+
+def _gen_flattenable_array(r):
+    schema = {"id": "scalar"}
+    order = ["id"]
+    has_nested = False
+    for _ in range(1 + r.randint(0, 2)):
+        k = _gen_bare_key(r)
+        if k in schema:
+            continue
+        s = _gen_flat_shape(r, 1, 3)
+        schema[k] = s
+        order.append(k)
+        if s != "scalar":
+            has_nested = True
+    if not has_nested:
+        k = _gen_bare_key(r)
+        schema[k] = {_gen_bare_key(r): {_gen_bare_key(r): "scalar"}}
+        order.append(k)
+    arr = []
+    for _ in range(2 + r.randint(0, 5)):
+        row = {}
+        for f in order:
+            x = r.random()
+            if x < 0.12:
+                continue  # field absent this row
+            elif x < 0.24:
+                row[f] = None  # field present-null (top-level null)
+            else:
+                row[f] = _materialize_flat_shape(r, schema[f])
+        arr.append(row)
+    return arr
+
+
+def test_flatten_roundtrip():
+    """Aligned arrays whose shared fields are fixed-shape nested objects with a
+    field or an intermediate nested level sometimes null/absent — the v3.2 flatten
+    path the scalar-only generator never produces, so flatten/unflatten and its
+    null-at-depth losslessness edge would otherwise be unexercised."""
+    r = _rng(7)
+    for i in range(ITERATIONS):
+        val = _gen_flattenable_array(r)
+        for no_flatten in (False, True):
+            gcf = encode_generic(val, GenericOptions(no_flatten=no_flatten))
+            decoded = decode_generic(gcf)
+            a = _json_norm(val)
+            b = _json_norm(decoded)
+            assert _structural_equal(a, b), (
+                f"iteration {i} no_flatten={no_flatten}: round-trip mismatch\n"
+                f"  input:   {json.dumps(val)}\n"
+                f"  decoded: {json.dumps(decoded)}\n"
+                f"  gcf:     {gcf!r}"
+            )
+
+
 def test_random_roundtrip():
     r = _rng(42)
     for i in range(ITERATIONS):
