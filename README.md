@@ -157,6 +157,44 @@ Output:
 
 Works on dicts, lists, and primitives. Lists of uniform dicts get tabular rows. Nested dicts use `## key` section headers.
 
+## Generic-Profile Delta (multi-turn)
+
+In an agent loop the same keyed table gets re-queried turn after turn. Instead of re-sending the whole table each time, send only the changed rows (SPEC §10a):
+
+```python
+from gcf import GenericSet, diff_generic_sets, encode_generic_delta, verify_generic_delta
+
+base = GenericSet(key="id", fields=["id", "status"], rows=[
+    {"id": 1001, "status": "pending"},
+    {"id": 1002, "status": "shipped"},
+])
+nxt = GenericSet(key="id", fields=["id", "status"], rows=[
+    {"id": 1001, "status": "shipped"},   # changed
+    {"id": 1003, "status": "pending"},   # added (1002 removed)
+])
+
+d = diff_generic_sets(base, nxt)
+wire = encode_generic_delta(d)                       # ## added / ## changed / ## removed
+held = verify_generic_delta(base, d, d.new_root)     # atomic apply + new_root verification
+```
+
+Opt-in and bilateral, keyed on content-addressed pack roots. By the 5th overlapping call, ~97% fewer tokens than re-sending JSON.
+
+### Re-anchor session helper
+
+`GenericDeltaSession` manages the delta/re-anchor cadence for you: each `next()` returns either a compact delta or, on its cadence, a full re-anchor (which re-grounds the consumer), updating its held base.
+
+```python
+from gcf import GenericDeltaSession, fixed_n, size_guard
+
+sess = GenericDeltaSession(base, tool="orders", policy=size_guard())
+wire = sess.current_full()                # transmit the base once to establish it
+for snapshot in stream:                   # each turn's current GenericSet
+    wire, is_full = sess.next(snapshot)    # a compact delta, or a periodic full re-anchor
+```
+
+`fixed_n(15)` re-anchors every N turns; `size_guard()` (recommended) re-anchors once the cumulative delta reaches a full payload's size. It introduces no new wire syntax and the decoder stays cadence-agnostic, so a re-anchor is just the protocol's "full" outcome on a schedule.
+
 ## API
 
 | Function | Description |
@@ -165,7 +203,11 @@ Works on dicts, lists, and primitives. Lists of uniform dicts get tabular rows. 
 | `encode_generic(data: Any) -> str` | Encode any value to GCF tabular format |
 | `decode(input_text: str) -> Payload` | Parse GCF text back to a Payload |
 | `encode_with_session(p: Payload, s: Session) -> str` | Encode with session deduplication |
-| `encode_delta(d: DeltaPayload) -> str` | Encode a delta (added/removed only) |
+| `encode_delta(d: DeltaPayload) -> str` | Encode a graph delta (added/removed only) |
+| `diff_generic_sets(base, next) -> GenericDeltaPayload` | Diff two keyed record sets (generic profile) |
+| `encode_generic_delta(d) -> str` / `decode_generic_delta(s)` | Generic-profile delta wire (§10a) |
+| `verify_generic_delta(base, d, root) -> GenericSet` | Atomic apply + `new_root` verification |
+| `GenericDeltaSession(base, tool, policy)` | Producer-side re-anchor cadence helper (§10a.8) |
 | `Session()` | Create a new session tracker (thread-safe) |
 
 ## Types
@@ -175,7 +217,9 @@ Works on dicts, lists, and primitives. Lists of uniform dicts get tabular rows. 
 | `Payload` | Full GCF payload: tool, budget, symbols, edges, pack root |
 | `Symbol` | Graph node: qualified name, kind, score, provenance, distance |
 | `Edge` | Directed relationship: source, target, edge type |
-| `DeltaPayload` | Diff between two packs: added/removed symbols and edges |
+| `DeltaPayload` | Diff between two graph packs: added/removed symbols and edges |
+| `GenericSet` / `GenericDeltaPayload` | Keyed record set and its generic-profile diff (§10a) |
+| `GenericDeltaSession` | Stateful producer that schedules delta vs full re-anchor (§10a.8) |
 | `Session` | Thread-safe tracker for multi-call deduplication |
 | `KIND_ABBREV` / `KIND_EXPAND` | Bidirectional kind abbreviation dicts |
 

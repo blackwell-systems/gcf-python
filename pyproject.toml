@@ -4,17 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gcf-python"
-version = "2.2.2"
-description = "The AI-native wire format for structured data. 50-92% fewer tokens than JSON. 100% comprehension on every frontier model. Zero dependencies."
+version = "2.3.0"
+description = "The AI-native wire format for structured data. 50-92% fewer tokens than JSON, with multi-turn delta encoding for agent loops. 100% comprehension on every frontier model. Zero dependencies."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     { name = "Blackwell Systems" },
 ]
-keywords = ["gcf", "llm", "mcp", "token-efficient", "graph", "wire-format"]
+keywords = ["gcf", "llm", "mcp", "token-efficient", "graph", "wire-format", "delta", "multi-turn", "agents"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -32,7 +32,7 @@ gcf = "gcf.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/blackwell-systems/gcf-python"
-Documentation = "https://blackwell-systems.github.io/gcf/"
+Documentation = "https://gcformat.com/"
 Specification = "https://github.com/blackwell-systems/gcf"
 
 [tool.hatch.build.targets.wheel]

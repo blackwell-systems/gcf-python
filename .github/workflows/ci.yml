@@ -13,7 +13,11 @@ jobs:
       matrix:
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
     steps:
+      # Check out gcf-python and the shared-fixtures gcf repo as SIBLINGS so the
+      # conformance runner's ../gcf/tests/conformance path resolves on CI.
       - uses: actions/checkout@v4
+        with:
+          path: gcf-python
       - uses: actions/checkout@v4
         with:
           repository: blackwell-systems/gcf
@@ -22,9 +26,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]" || pip install -e . && pip install pytest
+        working-directory: gcf-python
       - name: Unit tests
         run: pytest tests/ -v --ignore=tests/test_conformance_v2.py --ignore=tests/test_roundtrip_v2.py
-      - name: Conformance tests (133 fixtures)
+        working-directory: gcf-python
+      - name: Conformance tests (shared fixtures)
         run: pytest tests/test_conformance_v2.py -v
+        working-directory: gcf-python
       - name: Property-based round-trip (100K random + 100K adversarial)
         run: pytest tests/test_roundtrip_v2.py -v
+        working-directory: gcf-python
