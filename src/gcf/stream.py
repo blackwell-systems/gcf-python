@@ -38,8 +38,10 @@ class StreamEncoder:
         tokens_used: int = 0,
         pack_root: str = "",
         session: bool = False,
+        labeled_trailer_counts: bool = False,
     ) -> None:
         self._w = writer
+        self._labeled_trailer_counts = labeled_trailer_counts
         self._lock = threading.Lock()
         self._sym_index: dict[str, int] = {}
         self._next_id = 0
@@ -122,22 +124,29 @@ class StreamEncoder:
     def close(self) -> None:
         """Emit ##! summary trailer with final counts."""
         with self._lock:
-            counts: list[str] = []
+            # Build label:count sections, then either emit as-is (labeled form,
+            # SPEC 8.4.1) or strip to values (default positional form).
+            sections: list[str] = []
             group_order = ["targets", "related", "extended"]
 
             for g in group_order:
                 c = self._group_counts.get(g, 0)
                 if c > 0:
-                    counts.append(str(c))
+                    sections.append(f"{g}:{c}")
             for g, c in self._group_counts.items():
                 if g not in group_order and c > 0:
-                    counts.append(str(c))
+                    sections.append(f"{g}:{c}")
             if self._edge_count > 0:
-                counts.append(str(self._edge_count))
+                sections.append(f"edges:{self._edge_count}")
+
+            if self._labeled_trailer_counts:
+                counts_str = ",".join(sections)
+            else:
+                counts_str = ",".join(s.split(":", 1)[1] for s in sections)
 
             self._w.write(
                 f"##! summary symbols={self._next_id} edges={self._edge_count}"
-                f" counts={','.join(counts)}\n"
+                f" counts={counts_str}\n"
             )
 
     @property

@@ -199,9 +199,10 @@ def test_conformance(rel_path, data):
             )
 
     elif op == "graph-stream-encode":
-        # Skip a fixture requesting stream options this runner does not support
-        # (e.g. labeledTrailerCounts, SPEC 8.4.1). This runner supports none.
-        if data.get("options"):
+        # labeledTrailerCounts (SPEC 8.4.1) is supported; skip a fixture only if
+        # it requests some OTHER stream option this runner does not support.
+        options = data.get("options", {})
+        if any(k != "labeledTrailerCounts" for k in options):
             pytest.skip("unsupported stream options")
         import io
 
@@ -216,6 +217,7 @@ def test_conformance(rel_path, data):
             token_budget=inp.get("tokenBudget", 0),
             tokens_used=inp.get("tokensUsed", 0),
             pack_root=inp.get("packRoot", ""),
+            labeled_trailer_counts=options.get("labeledTrailerCounts", False),
         )
         for s in inp.get("symbols", []):
             enc.write_symbol(
