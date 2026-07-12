@@ -198,5 +198,40 @@ def test_conformance(rel_path, data):
                 f"turn {i + 1} wire mismatch:\n  got: {wire!r}\n  exp: {e['wire']!r}"
             )
 
+    elif op == "graph-stream-encode":
+        import io
+
+        from gcf.stream import StreamEncoder
+        from gcf.types import Edge, Symbol
+
+        inp = data["input"]
+        buf = io.StringIO()
+        enc = StreamEncoder(
+            buf,
+            inp.get("tool", ""),
+            token_budget=inp.get("tokenBudget", 0),
+            tokens_used=inp.get("tokensUsed", 0),
+            pack_root=inp.get("packRoot", ""),
+        )
+        for s in inp.get("symbols", []):
+            enc.write_symbol(
+                Symbol(
+                    qualified_name=s["qualifiedName"],
+                    kind=s["kind"],
+                    score=s["score"],
+                    provenance=s["provenance"],
+                    distance=s.get("distance", 0),
+                )
+            )
+        for e in inp.get("edges", []):
+            enc.write_edge(
+                Edge(source=e["source"], target=e["target"], edge_type=e["edgeType"])
+            )
+        enc.close()
+        got = buf.getvalue()
+        assert got == data["expected"], (
+            f"stream encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
+        )
+
     else:
         pytest.skip(f"unknown operation: {op}")
