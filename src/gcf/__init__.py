@@ -39,6 +39,17 @@ from .decode import DecodeError, decode
 from .delta import encode_delta
 from .encode import encode
 from .generic import encode_generic, GenericOptions
+from .generic_delta import (
+    GenericSet,
+    GenericDeltaPayload,
+    generic_pack_root,
+    diff_generic_sets,
+    encode_generic_full,
+    encode_generic_delta,
+    decode_generic_full,
+    decode_generic_delta,
+    verify_generic_delta,
+)
 from .session import Session, encode_with_session
 from .decode_generic import decode_generic
 from .stream import StreamEncoder
@@ -64,6 +75,15 @@ __all__ = [
     "encode_generic",
     "GenericOptions",
     "encode_with_session",
+    "GenericSet",
+    "GenericDeltaPayload",
+    "generic_pack_root",
+    "diff_generic_sets",
+    "encode_generic_full",
+    "encode_generic_delta",
+    "decode_generic_full",
+    "decode_generic_delta",
+    "verify_generic_delta",
 ]
 
-__version__ = "2.2.2"
+__version__ = "2.3.0"

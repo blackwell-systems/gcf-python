@@ -113,5 +113,56 @@ def test_conformance(rel_path, data):
         with pytest.raises((ValueError, Exception)):
             decode_generic(data["input"])
 
+    elif op == "generic-pack-root":
+        from gcf.generic_delta import GenericSet, generic_pack_root
+
+        inp = data["input"]
+        got = generic_pack_root(GenericSet(key=inp["key"], fields=inp["fields"], rows=inp["rows"]))
+        assert got == data["expected"], f"pack-root mismatch:\n  got: {got}\n  exp: {data['expected']}"
+
+    elif op == "generic-delta":
+        from gcf.generic_delta import GenericDeltaPayload, encode_generic_delta
+
+        inp = data["input"]
+        d = GenericDeltaPayload(
+            key=inp["key"], fields=inp["fields"],
+            base_root=inp["baseRoot"], new_root=inp["newRoot"],
+            added=inp.get("added", []), changed=inp.get("changed", []), removed=inp.get("removed", []),
+            tool=inp.get("tool", ""), delta_tokens=inp.get("deltaTokens", 0), full_tokens=inp.get("fullTokens", 0),
+        )
+        got = encode_generic_delta(d)
+        assert got == data["expected"], f"delta encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
+
+    elif op == "generic-delta-verify":
+        from gcf.generic_delta import GenericDeltaPayload, GenericSet, generic_pack_root, verify_generic_delta
+
+        inp = data["input"]
+        base = GenericSet(key=inp["base"]["key"], fields=inp["base"]["fields"], rows=inp["base"]["rows"])
+        dd = inp["delta"]
+        d = GenericDeltaPayload(
+            key=dd["key"], fields=dd["fields"], base_root=dd["baseRoot"], new_root=dd.get("newRoot", ""),
+            added=dd.get("added", []), changed=dd.get("changed", []), removed=dd.get("removed", []),
+        )
+        if data.get("expectedError"):
+            with pytest.raises(Exception) as ei:
+                verify_generic_delta(base, d, inp["expectedNewRoot"])
+            assert data["expectedError"] in str(ei.value)
+        else:
+            res = verify_generic_delta(base, d, inp["expectedNewRoot"])
+            assert generic_pack_root(res) == data["expected"]
+
+    elif op == "generic-delta-decode":
+        from gcf.generic_delta import GenericSet, decode_generic_delta, generic_pack_root, verify_generic_delta
+
+        inp = data["input"]
+        base = GenericSet(key=inp["base"]["key"], fields=inp["base"]["fields"], rows=inp["base"]["rows"])
+        if data.get("expectedError"):
+            with pytest.raises(Exception) as ei:
+                verify_generic_delta(base, decode_generic_delta(inp["wire"]), inp["expectedNewRoot"])
+            assert data["expectedError"] in str(ei.value)
+        else:
+            res = verify_generic_delta(base, decode_generic_delta(inp["wire"]), inp["expectedNewRoot"])
+            assert generic_pack_root(res) == data["expected"]
+
     else:
         pytest.skip(f"unknown operation: {op}")
