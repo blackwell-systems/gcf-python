@@ -98,7 +98,7 @@ enc = StreamEncoder(sys.stdout, "context_for_task", token_budget=5000)
 enc.write_symbol(Symbol(qualified_name="pkg.Auth", kind="function", score=0.95, provenance="lsp", distance=0))
 enc.write_symbol(Symbol(qualified_name="pkg.Server", kind="function", score=0.60, provenance="lsp", distance=1))
 enc.write_edge(Edge(source="pkg.Server", target="pkg.Auth", edge_type="calls"))
-enc.close()  # emits ## _summary trailer
+enc.close()  # emits ##! summary trailer
 ```
 
 Output:
@@ -110,7 +110,7 @@ GCF tool=context_for_task budget=5000
 @1 fn pkg.Server 0.60 lsp
 ## edges [?]
 @0<@1 calls
-## _summary symbols=2 edges=1 sections=targets:1,related:1,edges:1
+##! summary symbols=2 edges=1 counts=1,1,1
 ```
 
 The writer is any object with a `write(s: str)` method. Thread-safe. Standard `decode()` handles streaming output with no changes.
