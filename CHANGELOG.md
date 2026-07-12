@@ -18,6 +18,7 @@
 - Unit suite mirroring `gcf-go`: self-proving round-trip (diff -> encode -> apply -> recomputed root), determinism / row-order invariance, no-type-collision canonicalization, every invariant/error path, full-payload wire round-trip, the complete server -> wire -> consumer end-to-end loop, and malformed-wire-fails-closed.
 - Conformance runner support for `generic-pack-root`, `generic-delta`, `generic-delta-verify`, `generic-delta-decode` (12 shared fixtures); verified to produce identical pack roots and delta wire to `gcf-go`.
 - Session helper suite (`test_generic_delta_session.py`) mirroring `gcf-go`: FixedN cadence pattern, size-guard triggering, schema-change forced full, FixedN(15)-over-30-turns count, and the load-bearing consumer-stays-in-sync check under both policies. Conformance runner support for `generic-delta-session` (3 shared fixtures: fixed-N, size-guard, schema-change).
+- Generic-delta fuzz (`test_generic_delta_fuzz.py`), mirroring `gcf-go`: the decoder never crashes on arbitrary/mutated input, and arbitrary UTF-8 string cells (including multi-byte and control characters) survive the full-wire round-trip with the pack root preserved.
 
 ## v2.2.2 (2026-07-10)
 
