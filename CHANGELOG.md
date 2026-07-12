@@ -10,12 +10,14 @@
   - `diff_generic_sets` (the blessed producer path; centralizes the keyed-diff invariants), `encode_generic_full`, `encode_generic_delta`
   - `decode_generic_full`, `decode_generic_delta` (consumer wire parsing)
   - `verify_generic_delta` (atomic apply + `new_root` verification)
+  - Re-anchor session helper (SPEC §10a.8): `GenericDeltaSession` (`current_full`, `next`) with `ReanchorPolicy` / `fixed_n(n)` / `size_guard()` cadence policies and `DEFAULT_REANCHOR_N = 15`. Producer-side sugar over the primitives; introduces no new wire syntax (every emission is exactly `encode_generic_full` / `encode_generic_delta` output). Re-anchor cadence is byte-for-byte identical to `gcf-go` (size guard uses UTF-8 byte length to match Go's `len(string)`), verified by the shared `generic-delta-session` conformance fixtures.
 - Delta is opt-in and bilateral; the existing `encode_generic` path is unchanged (backward compatible).
 
 ### Tests
 
 - Unit suite mirroring `gcf-go`: self-proving round-trip (diff -> encode -> apply -> recomputed root), determinism / row-order invariance, no-type-collision canonicalization, every invariant/error path, full-payload wire round-trip, the complete server -> wire -> consumer end-to-end loop, and malformed-wire-fails-closed.
 - Conformance runner support for `generic-pack-root`, `generic-delta`, `generic-delta-verify`, `generic-delta-decode` (12 shared fixtures); verified to produce identical pack roots and delta wire to `gcf-go`.
+- Session helper suite (`test_generic_delta_session.py`) mirroring `gcf-go`: FixedN cadence pattern, size-guard triggering, schema-change forced full, FixedN(15)-over-30-turns count, and the load-bearing consumer-stays-in-sync check under both policies. Conformance runner support for `generic-delta-session` (3 shared fixtures: fixed-N, size-guard, schema-change).
 
 ## v2.2.2 (2026-07-10)
 

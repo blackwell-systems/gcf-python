@@ -164,5 +164,39 @@ def test_conformance(rel_path, data):
             res = verify_generic_delta(base, decode_generic_delta(inp["wire"]), inp["expectedNewRoot"])
             assert generic_pack_root(res) == data["expected"]
 
+    elif op == "generic-delta-session":
+        from gcf.generic_delta import (
+            GenericDeltaSession,
+            GenericSet,
+            fixed_n,
+            size_guard,
+        )
+
+        inp = data["input"]
+
+        def _set(s):
+            return GenericSet(
+                key=s["key"], fields=s["fields"], rows=s["rows"], name=s.get("name", "rows")
+            )
+
+        pol = inp["policy"]
+        if pol.get("mode") == "sizeGuard":
+            policy = size_guard()
+        else:
+            policy = fixed_n(pol.get("n", 0))
+
+        sess = GenericDeltaSession(_set(inp["base"]), inp.get("tool", ""), policy)
+        exp = data["expected"]
+        assert sess.current_full() == exp["initialFull"], (
+            f"initial full mismatch:\n  got: {sess.current_full()!r}\n  exp: {exp['initialFull']!r}"
+        )
+        for i, up in enumerate(inp["updates"]):
+            wire, is_full = sess.next(_set(up))
+            e = exp["emissions"][i]
+            assert is_full == e["isFull"], f"turn {i + 1}: isFull={is_full}, want {e['isFull']}"
+            assert wire == e["wire"], (
+                f"turn {i + 1} wire mismatch:\n  got: {wire!r}\n  exp: {e['wire']!r}"
+            )
+
     else:
         pytest.skip(f"unknown operation: {op}")

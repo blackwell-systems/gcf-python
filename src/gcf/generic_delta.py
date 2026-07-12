@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 from .scalar import (
@@ -362,3 +363,125 @@ def decode_generic_delta(text: str) -> GenericDeltaPayload:
         else:
             raise ValueError(f"delta_invalid: unknown delta section {name!r}")
     return d
+
+
+# --- producer-side re-anchor session helper (SPEC Section 10a.8) ---
+#
+# GenericDeltaSession manages the re-anchor cadence for a stream of
+# generic-profile updates. It is thin sugar over the primitives: each ``next``
+# emits either a compact delta or, on its chosen cadence, a full re-anchor,
+# updating its held base. It introduces NO new wire syntax: every payload it
+# emits is exactly what ``encode_generic_full`` or ``encode_generic_delta``
+# produce, and the decoder accepts them cadence-agnostically. N and the size
+# guard are the helper's knobs; they are never wire fields. (Section 10a.8 is
+# non-normative producer policy.)
+
+
+# The working default cadence for FixedN (SPEC Section 10a.8).
+DEFAULT_REANCHOR_N = 15
+
+
+class ReanchorMode(Enum):
+    """Selects the session's cadence policy."""
+
+    FIXED_N = 0  # re-anchor every N turns
+    SIZE_GUARD = 1  # re-anchor once cumulative delta reaches the full payload's size
+
+
+@dataclass
+class ReanchorPolicy:
+    """Selects when a :class:`GenericDeltaSession` re-anchors.
+
+    Construct it with :func:`fixed_n` or :func:`size_guard`.
+    """
+
+    mode: ReanchorMode = ReanchorMode.FIXED_N
+    n: int = 0  # turns between anchors; FixedN only
+
+
+def fixed_n(n: int) -> ReanchorPolicy:
+    """Re-anchor every ``n`` turns. ``n <= 0`` falls back to ``DEFAULT_REANCHOR_N``."""
+    if n <= 0:
+        n = DEFAULT_REANCHOR_N
+    return ReanchorPolicy(mode=ReanchorMode.FIXED_N, n=n)
+
+
+def size_guard() -> ReanchorPolicy:
+    """Re-anchor once the cumulative delta bytes since the last anchor reach the
+    current full payload's byte size: it re-anchors more under heavy churn, rarely
+    under light churn, and bounds the delta spent between anchors to about one full
+    payload. Production-recommended.
+    """
+    return ReanchorPolicy(mode=ReanchorMode.SIZE_GUARD)
+
+
+def _byte_len(s: str) -> int:
+    """UTF-8 byte length, matching Go's ``len(string)`` (bytes, not code points)."""
+    return len(s.encode("utf-8"))
+
+
+class GenericDeltaSession:
+    """Holds the current base and re-anchor state for a producer loop.
+
+    Not safe for concurrent use. Call :meth:`current_full` to get the initial
+    full payload to transmit, then :meth:`next` for each subsequent state.
+    """
+
+    def __init__(self, base: GenericSet, tool: str, policy: ReanchorPolicy) -> None:
+        if policy.mode == ReanchorMode.FIXED_N and policy.n <= 0:
+            policy = ReanchorPolicy(mode=policy.mode, n=DEFAULT_REANCHOR_N)
+        self._base = base
+        self._tool = tool
+        self._policy = policy
+        self._turn = 0
+        self._cum = 0  # cumulative delta bytes since the last anchor
+
+    @property
+    def turn(self) -> int:
+        """The number of :meth:`next` calls so far (the initial full is turn 0)."""
+        return self._turn
+
+    def current_full(self) -> str:
+        """Return the full payload for the current base (:func:`encode_generic_full`).
+
+        Send this first to establish the base; it is also a valid manual re-anchor.
+        """
+        return encode_generic_full(self._base, self._tool)
+
+    def _reanchor(self, nxt: GenericSet) -> str:
+        wire = encode_generic_full(nxt, self._tool)
+        self._base = nxt
+        self._cum = 0
+        return wire
+
+    def next(self, nxt: GenericSet) -> tuple[str, bool]:
+        """Advance the session by one turn to ``nxt``.
+
+        Returns ``(wire, is_full)``: the wire to transmit and whether it is a full
+        re-anchor (``True``) or a delta (``False``). A schema change forces a full
+        (Section 10a.7). The held base becomes ``nxt`` either way. The wire is
+        byte-identical to calling ``encode_generic_full`` / ``encode_generic_delta``
+        directly. May raise on duplicate identity / no key (propagated from
+        :func:`diff_generic_sets`).
+        """
+        self._turn += 1
+
+        # Schema change (or a fresh key) cannot be expressed as a delta -> full.
+        if nxt.key != self._base.key or list(self._base.fields) != list(nxt.fields):
+            return self._reanchor(nxt), True
+
+        d = diff_generic_sets(self._base, nxt)
+        delta_wire = encode_generic_delta(d)
+
+        if self._policy.mode == ReanchorMode.SIZE_GUARD:
+            reanchor = self._cum + _byte_len(delta_wire) >= _byte_len(
+                encode_generic_full(nxt, self._tool)
+            )
+        else:  # FIXED_N
+            reanchor = self._turn % self._policy.n == 0
+
+        if reanchor:
+            return self._reanchor(nxt), True
+        self._base = nxt
+        self._cum += _byte_len(delta_wire)
+        return delta_wire, False

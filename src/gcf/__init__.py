@@ -49,6 +49,12 @@ from .generic_delta import (
     decode_generic_full,
     decode_generic_delta,
     verify_generic_delta,
+    GenericDeltaSession,
+    ReanchorPolicy,
+    ReanchorMode,
+    fixed_n,
+    size_guard,
+    DEFAULT_REANCHOR_N,
 )
 from .session import Session, encode_with_session
 from .decode_generic import decode_generic
@@ -84,6 +90,12 @@ __all__ = [
     "decode_generic_full",
     "decode_generic_delta",
     "verify_generic_delta",
+    "GenericDeltaSession",
+    "ReanchorPolicy",
+    "ReanchorMode",
+    "fixed_n",
+    "size_guard",
+    "DEFAULT_REANCHOR_N",
 ]
 
 __version__ = "2.3.0"
