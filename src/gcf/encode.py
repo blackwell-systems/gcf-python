@@ -17,10 +17,16 @@ def encode(p: Payload) -> str:
     """
     parts: list[str] = []
 
-    # Build symbol index for edge references.
+    # Group symbols by distance (sorted by score descending within each group),
+    # then assign local IDs in output order so they are sequential in the wire
+    # (SPEC 16.1).
+    groups = _group_by_distance(p.symbols)
     sym_index: dict[str, int] = {}
-    for i, s in enumerate(p.symbols):
-        sym_index[s.qualified_name] = i
+    next_id = 0
+    for _distance, g_symbols in groups:
+        for s in g_symbols:
+            sym_index[s.qualified_name] = next_id
+            next_id += 1
 
     # Count valid edges (both endpoints in symbol index).
     valid_edges = sum(
@@ -28,14 +34,20 @@ def encode(p: Payload) -> str:
         if e.source in sym_index and e.target in sym_index
     )
 
-    # Header line.
-    header = f"GCF profile=graph tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} symbols={len(p.symbols)} edges={valid_edges}"
+    # Header line (SPEC 16.1): omit budget/tokens/edges when zero, matching the
+    # reference encoder.
+    header = f"GCF profile=graph tool={p.tool}"
+    if p.token_budget > 0:
+        header += f" budget={p.token_budget}"
+    if p.tokens_used > 0:
+        header += f" tokens={p.tokens_used}"
+    header += f" symbols={len(p.symbols)}"
+    if valid_edges > 0:
+        header += f" edges={valid_edges}"
     if p.pack_root:
         header += f" pack_root={p.pack_root}"
     parts.append(header)
 
-    # Group symbols by distance.
-    groups = _group_by_distance(p.symbols)
     group_names = ["targets", "related", "extended"]
 
     for g_distance, g_symbols in groups:
@@ -79,15 +91,17 @@ def encode(p: Payload) -> str:
 
 
 def _group_by_distance(symbols: list[Symbol]) -> list[tuple[int, list[Symbol]]]:
-    """Group symbols by distance, preserving order."""
+    """Group symbols by distance ascending, sorted by score descending within each
+    group (stable), matching the reference encoder so IDs are assigned canonically."""
     if not symbols:
         return []
 
+    ordered = sorted(symbols, key=lambda s: (s.distance, -s.score))
     groups: list[tuple[int, list[Symbol]]] = []
     current_distance: int | None = None
     current_symbols: list[Symbol] = []
 
-    for s in symbols:
+    for s in ordered:
         if current_distance is None or current_distance != s.distance:
             if current_symbols:
                 groups.append((current_distance, current_symbols))  # type: ignore[arg-type]

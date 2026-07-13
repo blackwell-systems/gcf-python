@@ -95,7 +95,37 @@ def test_conformance(rel_path, data):
     if op == "encode":
         expected = data["expected"]
         if expected.startswith("GCF profile=graph"):
-            pytest.skip("graph encode test")
+            # Buffered graph encode (distinct from generic encode and the streaming
+            # encoder). Build a graph Payload from the fixture and byte-compare.
+            from gcf.encode import encode as encode_graph
+            from gcf.types import Edge, Payload, Symbol
+
+            inp = data["input"]
+            payload = Payload(
+                tool=inp.get("tool", ""),
+                token_budget=inp.get("tokenBudget", 0),
+                tokens_used=inp.get("tokensUsed", 0),
+                pack_root=inp.get("packRoot", ""),
+                symbols=[
+                    Symbol(
+                        qualified_name=s["qualifiedName"],
+                        kind=s["kind"],
+                        score=s["score"],
+                        provenance=s["provenance"],
+                        distance=s.get("distance", 0),
+                    )
+                    for s in inp.get("symbols", [])
+                ],
+                edges=[
+                    Edge(source=e["source"], target=e["target"], edge_type=e["edgeType"])
+                    for e in inp.get("edges", [])
+                ],
+            )
+            got = encode_graph(payload)
+            assert got == expected, (
+                f"graph encode mismatch:\n  got: {got!r}\n  exp: {expected!r}"
+            )
+            return
         got = encode_generic(data["input"])
         # v3 encoder produces different byte output for attachment/array fixtures.
         v3_affected = any(rel_path.startswith(d) for d in ("attachments/", "arrays/"))
