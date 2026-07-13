@@ -177,7 +177,14 @@ def _parse_object_body(
                         i += 1
                         continue
 
-        i += 1
+        # An object-body line that is not a `## ` section, a `key=value` field, or
+        # an inline array is not valid content and MUST NOT be silently skipped
+        # (that dropped data, a lossless round-trip hole). A pipe-delimited line is
+        # a stray positional inline body with no eligible `^` cell (SPEC 16.5,
+        # orphan_inline_attachment); any other unrecognized line is likewise rejected.
+        if "|" in content:
+            raise ValueError(f"orphan_inline_attachment: {content}")
+        raise ValueError(f"invalid_line: unexpected content in object body: {content!r}")
     return i - start
 
 
