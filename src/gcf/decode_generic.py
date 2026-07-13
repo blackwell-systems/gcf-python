@@ -521,6 +521,11 @@ def _parse_tabular_body(
         if row_has_id:
             inline_idx = 0
 
+            # Columns that carry a `^` marker cell in this row legitimately expect
+            # a `.field` body. Any other `.field` is an orphan (Section 16.5) unless
+            # its name contains `>` (the flatten-fallback attachment, Section 7.4.6.1.4).
+            expected_att = set(traditional_att_fields) | set(inline_att_fields)
+
             while i < len(lines):
                 a_line = lines[i]
                 a_content: str | None = None
@@ -540,6 +545,14 @@ def _parse_tabular_body(
                     rest = a_content[1:]
                     att_name, after_name = _parse_attachment_name(rest)
                     after_name_stripped = after_name.lstrip()
+
+                    # Orphan attachment: a `.field` with no matching `^` cell in this
+                    # row is only legitimate for a `>`-named field (Section 7.4.6.1.4).
+                    # Any other unmatched attachment is rejected rather than silently
+                    # injected as an undeclared extra field, which would decode to a
+                    # record no encoder produces (Section 16.5, lossless round-trip).
+                    if att_name not in expected_att and ">" not in att_name:
+                        raise ValueError(f"orphan_attachment: {att_name}")
 
                     # Prefixed inline data.
                     ifs = inline_schemas.get(att_name)
