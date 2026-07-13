@@ -36,7 +36,7 @@ Specification: https://github.com/blackwell-systems/gcf
 
 from .constants import KIND_ABBREV, KIND_EXPAND
 from .decode import DecodeError, decode
-from .delta import encode_delta
+from .delta import decode_delta, encode_delta, verify_delta
 from .encode import encode
 from .generic import encode_generic, GenericOptions
 from .generic_delta import (
@@ -76,9 +76,11 @@ __all__ = [
     "StreamEncoder",
     "Symbol",
     "decode",
+    "decode_delta",
     "decode_generic",
     "encode",
     "encode_delta",
+    "verify_delta",
     "encode_generic",
     "GenericOptions",
     "encode_with_session",

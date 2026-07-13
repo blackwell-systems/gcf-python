@@ -176,7 +176,8 @@ def test_encode_skips_edges_with_missing_symbols():
     output = encode(p)
     # Section header is emitted (matches Go), but no edge lines beneath it
     assert "## edges [0]" in output
-    assert "edges=0" in output
+    # The zero edge count is omitted from the header (matches Go)
+    assert "edges=0" not in output
     lines_after_edges = output.split("## edges [0]\n")[1]
     assert lines_after_edges.strip() == ""
 
@@ -185,4 +186,4 @@ def test_encode_empty_payload():
     """Empty payload produces only header."""
     p = Payload(tool="test", token_budget=100, tokens_used=0)
     output = encode(p)
-    assert output == "GCF profile=graph tool=test budget=100 tokens=0 symbols=0 edges=0\n"
+    assert output == "GCF profile=graph tool=test budget=100 symbols=0\n"

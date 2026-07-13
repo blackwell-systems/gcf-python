@@ -343,16 +343,13 @@ def test_conformance(rel_path, data):
                 f"  got: {got!r}\n  exp: {call['expected']!r}"
             )
 
-    elif op == "delta":
-        # graph-delta fixtures share the `delta` operation but come in two shapes:
-        #   - encode: `input` is a structured object -> byte-compare encode_delta.
-        #   - verify: `input` is a WIRE STRING (with a base_snapshot) -> the wire
-        #     decoder + verifier is not yet implemented, so skip like delta-verify.
-        inp = data["input"]
-        if isinstance(inp, str) or "base_snapshot" in data:
-            pytest.skip("graph delta wire decoder not yet implemented")
-
-        from gcf.delta import encode_delta
+    elif op in ("delta", "delta-verify"):
+        # graph-delta fixtures come in two shapes:
+        #   - encode (`delta`, object input): byte-compare encode_delta.
+        #   - verify (`delta` with string input + base_snapshot, or `delta-verify`):
+        #     decode the wire, apply + verify against the base_snapshot pack_root.
+        from gcf.delta import decode_delta, encode_delta, verify_delta
+        from gcf.packroot import pack_root
         from gcf.types import DeltaPayload, Edge, Symbol
 
         def _sym(s):
@@ -367,24 +364,57 @@ def test_conformance(rel_path, data):
         def _edge(e):
             return Edge(source=e["source"], target=e["target"], edge_type=e["edgeType"])
 
-        d = DeltaPayload(
-            tool=inp.get("tool", ""),
-            base_root=inp["baseRoot"],
-            new_root=inp["newRoot"],
-            removed=[_sym(s) for s in inp.get("removed", [])],
-            added=[_sym(s) for s in inp.get("added", [])],
-            removed_edges=[_edge(e) for e in inp.get("removedEdges", [])],
-            added_edges=[_edge(e) for e in inp.get("addedEdges", [])],
-            delta_tokens=inp.get("deltaTokens", 0),
-            full_tokens=inp.get("fullTokens", 0),
-        )
-        got = encode_delta(d)
-        assert got == data["expected"], (
-            f"delta encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
-        )
+        inp = data["input"]
 
-    elif op == "delta-verify":
-        pytest.skip("graph delta wire decoder not yet implemented")
+        if op == "delta" and not isinstance(inp, str) and "base_snapshot" not in data:
+            # Structured-object encode.
+            d = DeltaPayload(
+                tool=inp.get("tool", ""),
+                base_root=inp["baseRoot"],
+                new_root=inp["newRoot"],
+                removed=[_sym(s) for s in inp.get("removed", [])],
+                added=[_sym(s) for s in inp.get("added", [])],
+                removed_edges=[_edge(e) for e in inp.get("removedEdges", [])],
+                added_edges=[_edge(e) for e in inp.get("addedEdges", [])],
+                delta_tokens=inp.get("deltaTokens", 0),
+                full_tokens=inp.get("fullTokens", 0),
+            )
+            got = encode_delta(d)
+            assert got == data["expected"], (
+                f"delta encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
+            )
+            return
+
+        # Wire-string decode + verify.
+        snap = data["base_snapshot"]
+        base_symbols = [_sym(s) for s in snap.get("symbols", [])]
+        base_edges = [_edge(e) for e in snap.get("edges", [])]
+        d = decode_delta(inp)
+
+        if data.get("expectedError"):
+            with pytest.raises(Exception) as ei:
+                verify_delta(
+                    base_symbols, base_edges,
+                    d.removed, d.added, d.removed_edges, d.added_edges,
+                    d.new_root,
+                )
+            assert data["expectedError"] in str(ei.value), (
+                f"expected error containing {data['expectedError']!r}, got {ei.value!r}"
+            )
+        else:
+            got_symbols, got_edges = verify_delta(
+                base_symbols, base_edges,
+                d.removed, d.added, d.removed_edges, d.added_edges,
+                d.new_root,
+            )
+            exp = data["expected_snapshot"]
+            exp_symbols = [_sym(s) for s in exp.get("symbols", [])]
+            exp_edges = [_edge(e) for e in exp.get("edges", [])]
+            assert pack_root(got_symbols, got_edges) == pack_root(exp_symbols, exp_edges), (
+                "delta verify pack_root mismatch:\n"
+                f"  got: {pack_root(got_symbols, got_edges)}\n"
+                f"  exp: {pack_root(exp_symbols, exp_edges)}"
+            )
 
     else:
         pytest.fail(

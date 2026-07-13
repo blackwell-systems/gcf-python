@@ -119,11 +119,11 @@ def test_roundtrip_multiple_edges():
 
     decoded = decode(encode(original))
     assert len(decoded.edges) == 3
-    # Verify edges exist (order preserved).
-    for orig, dec in zip(original.edges, decoded.edges):
-        assert dec.source == orig.source
-        assert dec.target == orig.target
-        assert dec.edge_type == orig.edge_type
+    # The encoder orders edges by source ID, then target ID, then edge type
+    # (SPEC 16.1), so compare as a set rather than by input order.
+    orig_set = {(e.source, e.target, e.edge_type) for e in original.edges}
+    dec_set = {(e.source, e.target, e.edge_type) for e in decoded.edges}
+    assert dec_set == orig_set
 
 
 def test_roundtrip_empty_payload():

@@ -35,7 +35,7 @@ def test_encode_delta_basic():
     assert "## removed\n" in output
     assert "fn pkg.OldHandler\n" in output
     assert "## added\n" in output
-    assert "@0 fn pkg.NewHandler 0.85 rwr\n" in output
+    assert "@0 fn pkg.NewHandler 0.85 rwr 0\n" in output
     assert "## edges_removed\n" in output
     assert "pkg.Router -> pkg.OldHandler calls\n" in output
     assert "## edges_added\n" in output
@@ -105,7 +105,7 @@ def test_encode_delta_only_added():
     )
     output = encode_delta(d)
     assert "## added\n" in output
-    assert "@0 class pkg.New 0.75 lsp_resolved\n" in output
+    assert "@0 class pkg.New 0.75 lsp_resolved 0\n" in output
     assert "## removed" not in output
 
 
@@ -124,9 +124,9 @@ def test_encode_delta_multiple_added_sequential_ids():
         full_tokens=200,
     )
     output = encode_delta(d)
-    assert "@0 fn pkg.A 0.90 x\n" in output
-    assert "@1 fn pkg.B 0.80 x\n" in output
-    assert "@2 fn pkg.C 0.70 x\n" in output
+    assert "@0 fn pkg.A 0.90 x 0\n" in output
+    assert "@1 fn pkg.B 0.80 x 0\n" in output
+    assert "@2 fn pkg.C 0.70 x 0\n" in output
 
 
 def test_encode_delta_kind_abbreviation():

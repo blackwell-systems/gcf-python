@@ -57,9 +57,10 @@ def test_session_second_encode_bare_refs():
 
     out2 = encode_with_session(p2, sess)
     assert "@0  # previously transmitted" in out2
-    assert "@1 type pkg.NewThing 0.60 ast_inferred" in out2
+    # New symbols get the next stable session-global ID (@2), not a per-response ID.
+    assert "@2 type pkg.NewThing 0.60 ast_inferred" in out2
     assert "## edges" in out2
-    assert "@0<@1 calls" in out2
+    assert "@0<@2 calls" in out2
     assert sess.size() == 3  # Func, Helper, NewThing
 
 
