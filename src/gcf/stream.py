@@ -136,8 +136,11 @@ class StreamEncoder:
             for g, c in self._group_counts.items():
                 if g not in group_order and c > 0:
                     sections.append(f"{g}:{c}")
-            if self._edge_count > 0:
-                sections.append(f"edges:{self._edge_count}")
+            # The edge count is always the last counts entry, even when 0 (SPEC
+            # 8.4, 8.4.1): it keeps the positional form unambiguous and anchors the
+            # labeled form (minimal counts=edges:0). Zero-count distance groups are
+            # omitted, but edges is not.
+            sections.append(f"edges:{self._edge_count}")
 
             if self._labeled_trailer_counts:
                 counts_str = ",".join(sections)
