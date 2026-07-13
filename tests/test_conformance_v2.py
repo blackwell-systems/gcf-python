@@ -22,6 +22,22 @@ def _load_fixtures():
 
 FIXTURES = _load_fixtures()
 
+MIN_FIXTURES = 150
+
+
+def test_minimum_fixtures_discovered():
+    """Floor assertion: a green conformance run MUST have exercised the full shared
+    suite. The parametrized test below skips when FIXTURES is empty, so a mispathed or
+    partial checkout would otherwise pass having verified almost nothing. A wholly-absent
+    directory skips (local ergonomics); in CI the separate gcf checkout step fails loudly
+    if the repo cannot be cloned."""
+    if not FIXTURE_DIR.exists():
+        pytest.skip("conformance fixtures not found")
+    assert len(FIXTURES) >= MIN_FIXTURES, (
+        f"discovered only {len(FIXTURES)} conformance fixtures, expected at least "
+        f"{MIN_FIXTURES}; the shared gcf fixture set is incomplete or mispathed"
+    )
+
 
 def _json_norm(v):
     return json.loads(json.dumps(v))
