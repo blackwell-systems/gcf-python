@@ -126,16 +126,13 @@ class StreamEncoder:
         with self._lock:
             # Build label:count sections, then either emit as-is (labeled form,
             # SPEC 8.4.1) or strip to values (default positional form).
-            sections: list[str] = []
-            group_order = ["targets", "related", "extended"]
-
-            for g in group_order:
-                c = self._group_counts.get(g, 0)
-                if c > 0:
-                    sections.append(f"{g}:{c}")
-            for g, c in self._group_counts.items():
-                if g not in group_order and c > 0:
-                    sections.append(f"{g}:{c}")
+            # One entry per non-empty distance group in group-header emission order
+            # (SPEC 8.4). The dict preserves insertion order, which is the order the
+            # group headers were emitted, so the trailer is deterministic and matches
+            # the section order (including distance_N groups) across all SDKs.
+            sections: list[str] = [
+                f"{g}:{c}" for g, c in self._group_counts.items() if c > 0
+            ]
             # The edge count is always the last counts entry, even when 0 (SPEC
             # 8.4, 8.4.1): it keeps the positional form unambiguous and anchors the
             # labeled form (minimal counts=edges:0). Zero-count distance groups are
