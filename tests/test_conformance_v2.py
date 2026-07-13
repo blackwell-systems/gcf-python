@@ -83,9 +83,6 @@ def _subset_match(expected, got):
 def test_conformance(rel_path, data):
     op = data.get("operation")
 
-    if op in ("session", "delta"):
-        pytest.skip(f"{op} not implemented")
-
     if data.get("inputBase64"):
         pytest.skip("binary input")
 
@@ -309,5 +306,87 @@ def test_conformance(rel_path, data):
             f"graph pack-root mismatch:\n  got: {got}\n  exp: {data['expected']}"
         )
 
+    elif op == "session":
+        # Graph session dedup (SPEC 6.x). A single Session persists across all
+        # calls in the fixture; symbol IDs must stay session-stable, and already
+        # transmitted symbols collapse to bare `@N  # previously transmitted`
+        # references. Byte-compare every call against its expected wire.
+        from gcf.session import Session, encode_with_session
+        from gcf.types import Edge, Payload, Symbol
+
+        sess = Session()
+        for i, call in enumerate(data["calls"]):
+            inp = call["input"]
+            payload = Payload(
+                tool=inp.get("tool", ""),
+                token_budget=inp.get("tokenBudget", 0),
+                tokens_used=inp.get("tokensUsed", 0),
+                pack_root=inp.get("packRoot", ""),
+                symbols=[
+                    Symbol(
+                        qualified_name=s["qualifiedName"],
+                        kind=s["kind"],
+                        score=s["score"],
+                        provenance=s["provenance"],
+                        distance=s.get("distance", 0),
+                    )
+                    for s in inp.get("symbols", [])
+                ],
+                edges=[
+                    Edge(source=e["source"], target=e["target"], edge_type=e["edgeType"])
+                    for e in inp.get("edges", [])
+                ],
+            )
+            got = encode_with_session(payload, sess)
+            assert got == call["expected"], (
+                f"session call {i + 1} wire mismatch:\n"
+                f"  got: {got!r}\n  exp: {call['expected']!r}"
+            )
+
+    elif op == "delta":
+        # graph-delta fixtures share the `delta` operation but come in two shapes:
+        #   - encode: `input` is a structured object -> byte-compare encode_delta.
+        #   - verify: `input` is a WIRE STRING (with a base_snapshot) -> the wire
+        #     decoder + verifier is not yet implemented, so skip like delta-verify.
+        inp = data["input"]
+        if isinstance(inp, str) or "base_snapshot" in data:
+            pytest.skip("graph delta wire decoder not yet implemented")
+
+        from gcf.delta import encode_delta
+        from gcf.types import DeltaPayload, Edge, Symbol
+
+        def _sym(s):
+            return Symbol(
+                qualified_name=s["qualifiedName"],
+                kind=s["kind"],
+                score=s.get("score", 0.0),
+                provenance=s.get("provenance", ""),
+                distance=s.get("distance", 0),
+            )
+
+        def _edge(e):
+            return Edge(source=e["source"], target=e["target"], edge_type=e["edgeType"])
+
+        d = DeltaPayload(
+            tool=inp.get("tool", ""),
+            base_root=inp["baseRoot"],
+            new_root=inp["newRoot"],
+            removed=[_sym(s) for s in inp.get("removed", [])],
+            added=[_sym(s) for s in inp.get("added", [])],
+            removed_edges=[_edge(e) for e in inp.get("removedEdges", [])],
+            added_edges=[_edge(e) for e in inp.get("addedEdges", [])],
+            delta_tokens=inp.get("deltaTokens", 0),
+            full_tokens=inp.get("fullTokens", 0),
+        )
+        got = encode_delta(d)
+        assert got == data["expected"], (
+            f"delta encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
+        )
+
+    elif op == "delta-verify":
+        pytest.skip("graph delta wire decoder not yet implemented")
+
     else:
-        pytest.skip(f"unknown operation: {op}")
+        pytest.fail(
+            f"unhandled operation: {op}; must be handled or explicitly allow-listed"
+        )

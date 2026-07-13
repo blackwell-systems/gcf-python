@@ -77,22 +77,32 @@ def encode_with_session(p: Payload, sess: Session | None = None) -> str:
 
     parts: list[str] = []
 
-    # Build local ID mapping for this response.
+    # Build session-stable ID mapping (matching the reference encoder):
+    # previously transmitted symbols keep their existing session-global ID;
+    # new symbols get the next available session IDs in payload order. These
+    # are NOT per-call local indices, so IDs stay stable across calls within a
+    # session (see graph-session conformance fixtures).
     local_index: dict[str, int] = {}
-    for i, s in enumerate(p.symbols):
-        local_index[s.qualified_name] = i
+    for s in p.symbols:
+        if sess.transmitted(s.qualified_name):
+            local_index[s.qualified_name] = sess.get_id(s.qualified_name)
+    next_new = sess.size()
+    for s in p.symbols:
+        if not sess.transmitted(s.qualified_name):
+            local_index[s.qualified_name] = next_new
+            next_new += 1
 
-    # Count valid edges.
-    valid_edges = sum(
-        1 for e in p.edges
-        if e.source in local_index and e.target in local_index
-    )
-
-    # Header with session=true marker.
-    header = (
-        f"GCF profile=graph tool={p.tool} budget={p.token_budget} tokens={p.tokens_used} "
-        f"symbols={len(p.symbols)} edges={valid_edges} session=true"
-    )
+    # Header with session=true marker. Omit budget/tokens/edges when zero,
+    # matching the reference encoder.
+    header = f"GCF profile=graph tool={p.tool}"
+    if p.token_budget > 0:
+        header += f" budget={p.token_budget}"
+    if p.tokens_used > 0:
+        header += f" tokens={p.tokens_used}"
+    header += f" symbols={len(p.symbols)}"
+    if p.edges:
+        header += f" edges={len(p.edges)}"
+    header += " session=true"
     if p.pack_root:
         header += f" pack_root={p.pack_root}"
     parts.append(header)
@@ -128,7 +138,7 @@ def encode_with_session(p: Payload, sess: Session | None = None) -> str:
 
     # Edges section.
     if p.edges:
-        parts.append(f"## edges [{valid_edges}]")
+        parts.append(f"## edges [{len(p.edges)}]")
         for e in p.edges:
             src_idx = local_index.get(e.source)
             tgt_idx = local_index.get(e.target)
