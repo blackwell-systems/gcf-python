@@ -52,17 +52,25 @@ def encode(p: Payload) -> str:
             kind = KIND_ABBREV.get(s.kind, s.kind)
             parts.append(f"@{idx} {kind} {s.qualified_name} {s.score:.2f} {s.provenance}")
 
-    # Edges section.
+    # Edges section. Order edges by source ID then target ID (then edge type
+    # for parallel edges) so the wire is canonical regardless of the order
+    # edges were provided (SPEC 16.1). Edge reordering is decode-invariant
+    # (edges are a set) and does not affect pack_root, which sorts edge records
+    # independently.
     if p.edges:
-        edge_lines: list[str] = []
+        resolved: list[tuple[int, int, str, str]] = []
         for e in p.edges:
             src_idx = sym_index.get(e.source)
             tgt_idx = sym_index.get(e.target)
             if src_idx is None or tgt_idx is None:
                 continue
-            line = f"@{tgt_idx}<@{src_idx} {e.edge_type}"
-            if e.status and e.status != "unchanged":
-                line += f" {e.status}"
+            resolved.append((src_idx, tgt_idx, e.edge_type, e.status))
+        resolved.sort(key=lambda r: (r[0], r[1], r[2]))
+        edge_lines: list[str] = []
+        for src_idx, tgt_idx, edge_type, status in resolved:
+            line = f"@{tgt_idx}<@{src_idx} {edge_type}"
+            if status and status != "unchanged":
+                line += f" {status}"
             edge_lines.append(line)
         parts.append(f"## edges [{len(edge_lines)}]")
         parts.extend(edge_lines)
