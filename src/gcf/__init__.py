@@ -56,6 +56,7 @@ from .generic_delta import (
     size_guard,
     DEFAULT_REANCHOR_N,
 )
+from .packroot import pack_root
 from .session import Session, encode_with_session
 from .decode_generic import decode_generic
 from .stream import StreamEncoder
@@ -84,6 +85,7 @@ __all__ = [
     "GenericSet",
     "GenericDeltaPayload",
     "generic_pack_root",
+    "pack_root",
     "diff_generic_sets",
     "encode_generic_full",
     "encode_generic_delta",

@@ -285,5 +285,29 @@ def test_conformance(rel_path, data):
             f"stream encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
         )
 
+    elif op == "pack-root":
+        from gcf.packroot import pack_root
+        from gcf.types import Edge, Symbol
+
+        inp = data["input"]
+        symbols = [
+            Symbol(
+                qualified_name=s["qualifiedName"],
+                kind=s["kind"],
+                score=s["score"],
+                provenance=s["provenance"],
+                distance=s.get("distance", 0),
+            )
+            for s in inp.get("symbols", [])
+        ]
+        edges = [
+            Edge(source=e["source"], target=e["target"], edge_type=e["edgeType"])
+            for e in inp.get("edges", [])
+        ]
+        got = pack_root(symbols, edges)
+        assert got == data["expected"], (
+            f"graph pack-root mismatch:\n  got: {got}\n  exp: {data['expected']}"
+        )
+
     else:
         pytest.skip(f"unknown operation: {op}")
