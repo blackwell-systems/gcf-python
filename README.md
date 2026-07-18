@@ -11,7 +11,7 @@
 
 # gcf-python
 
-Python implementation of [GCF](https://gcformat.com/) — the most token-efficient wire format for LLMs. A drop-in alternative to JSON and TOON for any structured data.
+Python implementation of [GCF](https://gcformat.com/), the most token-efficient wire format for LLMs. A drop-in alternative to JSON and TOON for any structured data.
 
 <p align="center">
   <img src="assets/gcf-python-diagram.png" alt="gcf-python" width="80%">
