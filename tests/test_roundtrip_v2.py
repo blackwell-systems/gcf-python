@@ -214,13 +214,13 @@ def _structural_equal(a, b):
     return a == b
 
 
-def _gen_flat_shape(r, depth, max_depth):
+def _gen_flat_shape(r, depth, max_depth, key_fn=_gen_bare_key):
     """A fixed nested schema: the string "scalar" or a dict of named sub-shapes."""
     if depth >= max_depth or r.random() < 0.45:
         return "scalar"
     shape = {}
     for _ in range(1 + r.randint(0, 2)):
-        shape[_gen_bare_key(r)] = _gen_flat_shape(r, depth + 1, max_depth)
+        shape[key_fn(r)] = _gen_flat_shape(r, depth + 1, max_depth, key_fn)
     return shape if shape else "scalar"
 
 
@@ -235,23 +235,27 @@ def _materialize_flat_shape(r, shape):
     return obj
 
 
-def _gen_flattenable_array(r):
+def _gen_flattenable_array(r, key_fn=_gen_bare_key):
     schema = {"id": "scalar"}
     order = ["id"]
     has_nested = False
     for _ in range(1 + r.randint(0, 2)):
-        k = _gen_bare_key(r)
+        k = key_fn(r)
         if k in schema:
             continue
-        s = _gen_flat_shape(r, 1, 3)
+        s = _gen_flat_shape(r, 1, 3, key_fn)
         schema[k] = s
         order.append(k)
         if s != "scalar":
             has_nested = True
     if not has_nested:
-        k = _gen_bare_key(r)
-        schema[k] = {_gen_bare_key(r): {_gen_bare_key(r): "scalar"}}
-        order.append(k)
+        # Force at least one nested field so the flatten path is exercised. Adversarial
+        # key_fns collide often, so only add the synthesized field if its key is fresh
+        # (mirrors the Go SDK non-nested fallback dedup).
+        k = key_fn(r)
+        if k not in schema:
+            schema[k] = {key_fn(r): {key_fn(r): "scalar"}}
+            order.append(k)
     arr = []
     for _ in range(2 + r.randint(0, 5)):
         row = {}
@@ -286,6 +290,62 @@ def test_flatten_roundtrip():
                 f"  decoded: {json.dumps(decoded)}\n"
                 f"  gcf:     {gcf!r}"
             )
+
+
+# Alphabet targeting the flatten-eligibility guard: the empty key and every arrangement
+# of ">" (which forms path-column separators in SPEC 7.4.6), mixed with plain keys so a
+# nested field still qualifies for flattening and the buggy path is actually reached.
+FLATTEN_ADVERSARIAL_KEYS = [
+    "", ">", ">>", "a>b", "a>", ">b", ">a>", "a>>b", "a", "b", "c", "id", "m", "n",
+]
+
+# Adversarial runs use their own high iteration count. Empty/">" keys are only a slice of
+# the alphabet, so a healthy multiple over the default is needed to reliably hit them.
+FLATTEN_ADVERSARIAL_ITERATIONS = int(
+    os.environ.get("GCF_FLATTEN_ADVERSARIAL_ITERATIONS", "100000")
+)
+
+
+def _gen_flatten_adversarial_key(r):
+    return r.choice(FLATTEN_ADVERSARIAL_KEYS)
+
+
+def test_flatten_roundtrip_adversarial_keys():
+    """Same flatten path as test_flatten_roundtrip, but keys are drawn from an alphabet
+    that includes the empty key and every ">" arrangement. An empty or ">"-bearing key
+    produces an ambiguous path column (leading/trailing/bare ">") the decoder refuses to
+    invert; the pre-fix _analyze_flattenable guard excluded ">" but not "", so an
+    empty-key field was flattened into a column that could not round-trip (silent
+    corruption). The plain keys in the alphabet keep at least one field flatten-eligible
+    so the buggy path is exercised rather than skipped."""
+    r = _rng(20250806)
+    saw_empty = False
+    saw_gt = False
+    for i in range(FLATTEN_ADVERSARIAL_ITERATIONS):
+        val = _gen_flattenable_array(r, _gen_flatten_adversarial_key)
+        for row in val:
+            for k in row:
+                if k == "":
+                    saw_empty = True
+                elif ">" in k:
+                    saw_gt = True
+        # no_flatten=False triggers the flatten path (the buggy one); no_flatten=True is
+        # the attachment path. Both must round-trip.
+        for no_flatten in (False, True):
+            gcf = encode_generic(val, GenericOptions(no_flatten=no_flatten))
+            decoded = decode_generic(gcf)
+            a = _json_norm(val)
+            b = _json_norm(decoded)
+            assert _structural_equal(a, b), (
+                f"iteration {i} no_flatten={no_flatten}: round-trip mismatch\n"
+                f"  input:   {json.dumps(val)}\n"
+                f"  decoded: {json.dumps(decoded)}\n"
+                f"  gcf:     {gcf!r}"
+            )
+    # Generator liveness: prove the adversarial keys actually reached the top-level rows,
+    # otherwise the test could pass vacuously without ever exercising the guard.
+    assert saw_empty, "generator never produced an empty top-level key"
+    assert saw_gt, "generator never produced a '>'-bearing top-level key"
 
 
 def test_random_roundtrip():
