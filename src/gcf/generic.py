@@ -165,8 +165,9 @@ def _analyze_flattenable(
     arr: list[dict], field_name: str, parent_path: str
 ) -> list[dict] | None:
     """Analyze whether a field can be flattened. Returns list of leaf descriptors or None."""
-    # Field names containing ">" cannot be flattened (would create ambiguous paths).
-    if ">" in field_name:
+    # A field name that is empty or contains ">" cannot be flattened: it would create an
+    # ambiguous path column the decoder treats as literal (SPEC 7.4.6.1.3).
+    if field_name == "" or ">" in field_name:
         return None
     canonical_shape: dict[str, str] | None = None  # key -> "scalar" | "nested"
 
@@ -192,7 +193,7 @@ def _analyze_flattenable(
         if canonical_shape is None:
             canonical_shape = {}
             for k in keys:
-                if ">" in k:
+                if k == "" or ">" in k:  # empty/">" -> ambiguous path (SPEC 7.4.6.1.3)
                     return None
                 val = v[k]
                 if isinstance(val, list):
