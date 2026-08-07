@@ -45,6 +45,8 @@ def decode(input_text: str) -> Payload:
     sym_by_id: dict[int, Symbol] = {}
     current_distance = 0
     in_edges = False
+    declared_edges = -1
+    edges_declared = False
 
     for line in lines[1:]:
         line = line.rstrip("\r")
@@ -58,13 +60,29 @@ def decode(input_text: str) -> Payload:
         # Group header.
         if line.startswith("## "):
             group = line[3:]
-            # Strip bracket suffix: "edges [200]" -> "edges"
+            # Strip bracket suffix: "edges [200]" -> "edges", capturing the
+            # declared count so it can be enforced per Section 13.
+            declared_count = -1
             bracket_idx = group.find(" [")
             if bracket_idx >= 0:
+                bracket = group[bracket_idx + 2:]
                 group = group[:bracket_idx]
+                end = bracket.find("]")
+                if end >= 0:
+                    cnt_str = bracket[:end]
+                    if cnt_str != "?":  # "[?]" is a streaming deferred count (Section 8)
+                        try:
+                            declared_count = int(cnt_str)
+                        except ValueError:
+                            raise DecodeError(
+                                f"count_mismatch: invalid section count {cnt_str!r}"
+                            )
             if is_delta and group not in valid_delta_sections:
                 raise DecodeError(f"malformed_delta: invalid delta section {group!r}")
             in_edges = group == "edges"
+            if in_edges and declared_count >= 0:
+                declared_edges = declared_count
+                edges_declared = True
             if not in_edges:
                 if group == "targets":
                     current_distance = 0
@@ -90,6 +108,13 @@ def decode(input_text: str) -> Payload:
             sym, sym_id = _parse_symbol_line(line, current_distance)
             symbols.append(sym)
             sym_by_id[sym_id] = sym
+
+    # Section 13: a declared [N] section count MUST match the actual item count.
+    # The graph edges section is the graph profile's only [N]-bearing section.
+    if edges_declared and len(p.edges) != declared_edges:
+        raise DecodeError(
+            f"count_mismatch: declared {declared_edges} edges, got {len(p.edges)}"
+        )
 
     p.symbols = symbols
     return p

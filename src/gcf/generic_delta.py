@@ -299,16 +299,23 @@ def decode_generic_full(text: str) -> tuple[GenericSet, str]:
     while i < len(lines):
         line = lines[i]
         if not line.startswith("## "):
-            i += 1
-            continue
+            # Only blank lines, comments, and the ##! summary trailer are valid
+            # outside a section; any other line is a surplus row past a declared
+            # section count (Section 13).
+            if line == "" or line.startswith("# ") or line.startswith("##! "):
+                i += 1
+                continue
+            raise ValueError(
+                f"count_mismatch: unexpected content after declared section rows: {line!r}"
+            )
         name, count, fields, key_field = _parse_section_header(line[3:])
         s.name, s.fields = name, fields
         if not s.key:
             s.key = key_field
         i += 1
-        for _ in range(count):
-            if i >= len(lines):
-                raise ValueError("delta_invalid: fewer rows than declared count")
+        for j in range(count):
+            if i >= len(lines) or lines[i].startswith("## "):
+                raise ValueError(f"count_mismatch: declared {count} rows, got {j}")
             s.rows.append(_parse_row(lines[i], fields))
             i += 1
     return s, hdr.get("pack_root", "")
@@ -335,8 +342,15 @@ def decode_generic_delta(text: str) -> GenericDeltaPayload:
     while i < len(lines):
         line = lines[i]
         if not line.startswith("## "):
-            i += 1
-            continue
+            # Only blank lines, comments, and the ##! summary trailer are valid
+            # outside a section; any other line is a surplus row past a declared
+            # section count (Section 13).
+            if line == "" or line.startswith("# ") or line.startswith("##! "):
+                i += 1
+                continue
+            raise ValueError(
+                f"count_mismatch: unexpected content after declared section rows: {line!r}"
+            )
         name, count, fields, key_field = _parse_section_header(line[3:])
         if not d.key and key_field:
             d.key = key_field
@@ -345,9 +359,9 @@ def decode_generic_delta(text: str) -> GenericDeltaPayload:
         i += 1
         if name in ("added", "changed"):
             rows = []
-            for _ in range(count):
-                if i >= len(lines):
-                    raise ValueError(f"delta_invalid: fewer rows than declared count in ## {name}")
+            for j in range(count):
+                if i >= len(lines) or lines[i].startswith("## "):
+                    raise ValueError(f"count_mismatch: declared {count} rows in ## {name}, got {j}")
                 rows.append(_parse_row(lines[i], fields))
                 i += 1
             if name == "added":
@@ -355,9 +369,9 @@ def decode_generic_delta(text: str) -> GenericDeltaPayload:
             else:
                 d.changed = rows
         elif name == "removed":
-            for _ in range(count):
-                if i >= len(lines):
-                    raise ValueError("delta_invalid: fewer identities than declared count in ## removed")
+            for j in range(count):
+                if i >= len(lines) or lines[i].startswith("## "):
+                    raise ValueError(f"count_mismatch: declared {count} identities in ## removed, got {j}")
                 d.removed.append(parse_scalar(lines[i], True))
                 i += 1
         else:

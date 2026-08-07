@@ -91,7 +91,14 @@ def decode_generic(input_text: str) -> Any:
         return parse_scalar(first[1:])
 
     if first.startswith("## ["):
-        arr, _ = _parse_array_from_header(content_lines, 0, 0, first[3:])
+        arr, consumed = _parse_array_from_header(content_lines, 0, 0, first[3:])
+        # A root array or keyed map spans the whole document, so any structural line
+        # past the consumed rows is a surplus item, not sibling content. The row loop
+        # stops at the declared count, so the count assert only catches the deficit
+        # case; surplus is caught here (SPEC Section 13: a mismatch, fewer OR more
+        # items than declared, is an error).
+        if consumed < len(content_lines):
+            raise ValueError("count_mismatch: declared count is fewer than the rows present")
         return arr
 
     result: dict[str, Any] = {}
