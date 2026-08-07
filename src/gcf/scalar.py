@@ -32,6 +32,10 @@ def needs_quote(s: str) -> bool:
         return True
     if s in ("-", "~", "^", "true", "false"):
         return True
+    # A value shaped like an inline-schema attachment marker (^{...}) would decode
+    # as an attachment and lose the string, so it must be quoted (SPEC 2.4).
+    if len(s) >= 3 and s[0] == "^" and s[1] == "{" and s[-1] == "}":
+        return True
     if _JSON_NUMBER_RE.match(s):
         return True
     if _NUMERIC_LIKE_RE.match(s):
