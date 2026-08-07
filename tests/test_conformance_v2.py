@@ -133,6 +133,13 @@ def test_conformance(rel_path, data):
         assert _structural_equal(
             _json_norm(data["input"]), _json_norm(decoded)
         ), f"round-trip mismatch:\n  input:   {data['input']}\n  decoded: {decoded}"
+        # Re-encode idempotence: encode(decode(got)) == got. Order-sensitive, so it
+        # catches a decoder that drops object field order (which _structural_equal,
+        # normalizing through unordered maps, cannot). Object key ordering is a
+        # preserved round-trip property (SPEC 52, 931).
+        assert encode_generic(decoded) == got, (
+            f"re-encode not idempotent (field order or value loss):\n  got:  {got!r}\n  renc: {encode_generic(decoded)!r}"
+        )
 
     elif op == "decode":
         got = decode_generic(data["input"])

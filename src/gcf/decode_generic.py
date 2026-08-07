@@ -671,8 +671,22 @@ def _parse_tabular_body(
                     if extra_name in attachment_values:
                         raise ValueError(f"duplicate_attachment: {extra_name}")
 
+        # Reconstruct the row in declared field-union order. A flattened group is
+        # emitted at the position of its first path column, so the nested object
+        # reappears where the original field was, not appended at the end (SPEC
+        # 7.4.6.1 step 7 and the key-order preservation requirement, SPEC 52, 931).
+        nested = _unflatten_paths(path_column_map, flat_values, flat_absent) if path_column_map else {}
+        emitted_groups: set[str] = set()
         row: dict[str, Any] = {}
         for f in fields:
+            if f in path_column_map:
+                top = path_column_map[f][0]
+                if top in emitted_groups:
+                    continue
+                emitted_groups.add(top)
+                if top in nested:  # omitted when the whole group is absent
+                    row[top] = nested[top]
+                continue
             if f in missing_fields:
                 continue
             if f in cell_values:
@@ -683,10 +697,6 @@ def _parse_tabular_body(
         for k, v in attachment_values.items():
             if k not in row:
                 row[k] = v
-        # Unflatten path columns into nested objects.
-        if path_column_map:
-            nested = _unflatten_paths(path_column_map, flat_values, flat_absent)
-            row.update(nested)
 
         rows.append(row)
 
