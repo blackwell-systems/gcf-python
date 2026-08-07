@@ -43,6 +43,20 @@ def _json_norm(v):
     return json.loads(json.dumps(v))
 
 
+def _strip_delta_savings(s):
+    # Remove the derived ` savings=...` header stat so re-encode idempotence can be
+    # checked on the parts of the wire the payload actually carries. The stat is
+    # computed from the original set sizes at encode time and is not on the wire, so a
+    # decode/re-encode legitimately cannot reconstruct it.
+    idx = s.find(" savings=")
+    if idx < 0:
+        return s
+    end = idx + len(" savings=")
+    while end < len(s) and s[end] not in (" ", "\n"):
+        end += 1
+    return s[:idx] + s[end:]
+
+
 def _structural_equal(a, b):
     """Deep equality ignoring object key order."""
     if a is None and b is None:
@@ -119,6 +133,15 @@ def test_conformance(rel_path, data):
             assert got == expected, (
                 f"graph encode mismatch:\n  got: {got!r}\n  exp: {expected!r}"
             )
+            # Re-encode idempotence: encode(decode(got)) == got. Confirms the graph
+            # decoder reconstructs the payload without dropping or reordering fields
+            # (SPEC 52, 931).
+            from gcf.decode import decode as decode_graph
+
+            decoded_graph = decode_graph(got)
+            assert encode_graph(decoded_graph) == got, (
+                f"graph re-encode not idempotent:\n  got:  {got!r}\n  renc: {encode_graph(decoded_graph)!r}"
+            )
             return
         got = encode_generic(data["input"])
         # v3 encoder produces different byte output for attachment/array fixtures.
@@ -168,7 +191,7 @@ def test_conformance(rel_path, data):
         assert got == data["expected"], f"pack-root mismatch:\n  got: {got}\n  exp: {data['expected']}"
 
     elif op == "generic-delta":
-        from gcf.generic_delta import GenericDeltaPayload, encode_generic_delta
+        from gcf.generic_delta import GenericDeltaPayload, decode_generic_delta, encode_generic_delta
 
         inp = data["input"]
         d = GenericDeltaPayload(
@@ -179,6 +202,14 @@ def test_conformance(rel_path, data):
         )
         got = encode_generic_delta(d)
         assert got == data["expected"], f"delta encode mismatch:\n  got: {got!r}\n  exp: {data['expected']!r}"
+        # Re-encode idempotence: encode(decode(got)) == got, ignoring the derived
+        # savings= header stat (see _strip_delta_savings). Confirms the delta decoder
+        # preserves fields and their order (SPEC 52, 931).
+        decoded_delta = decode_generic_delta(got)
+        renc = encode_generic_delta(decoded_delta)
+        assert _strip_delta_savings(renc) == _strip_delta_savings(got), (
+            f"delta re-encode not idempotent:\n  got:  {got!r}\n  renc: {renc!r}"
+        )
 
     elif op == "generic-delta-verify":
         from gcf.generic_delta import GenericDeltaPayload, GenericSet, generic_pack_root, verify_generic_delta
