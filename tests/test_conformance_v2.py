@@ -86,9 +86,6 @@ def test_conformance(rel_path, data):
     if data.get("inputBase64"):
         pytest.skip("binary input")
 
-    if "negative_zero" in rel_path:
-        pytest.skip("Python JSON parser does not preserve negative zero for integers")
-
     if op == "encode":
         expected = data["expected"]
         if expected.startswith("GCF profile=graph"):

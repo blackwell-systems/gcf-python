@@ -106,7 +106,8 @@ def format_number(f: float) -> str:
     if math.isinf(f):
         return "0"
     if f == 0.0:
-        return "-0" if math.copysign(1.0, f) < 0 else "0"
+        # Negative zero canonicalizes to 0 (SPEC 2.3.1): -0.0 equals 0.0 by value.
+        return "0"
     a = abs(f)
     if 1e-6 <= a < 1e21:
         # Use repr for shortest round-trippable form.
