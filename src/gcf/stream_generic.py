@@ -52,6 +52,29 @@ class GenericStreamEncoder:
             self._w.write(f"## {format_key(name)} [?]{{{_format_field_decl(fields)}}}\n")
             self._current = {"name": name, "fields": list(fields), "count": 0}
 
+    def begin_keyed_map(self, name: str, key_label: str, value_fields: Sequence[str]) -> None:
+        """Start a keyed-map section with deferred count [?:] (SPEC 7.2a).
+
+        key_label is the key column; value_fields are the value-object fields.
+        Each write_row value slice is [key_value, *value_fields]."""
+        with self._lock:
+            if self._err is not None:
+                return
+            if self._current is not None:
+                self._end_array_locked()
+            # A streaming value field name containing ">" is a flattened path a
+            # stream cannot represent (SPEC 8.3, 7.4.6). Record and surface at close().
+            for f in value_fields:
+                if ">" in f:
+                    self._err = ValueError(
+                        f"streaming field name {f!r} contains '>' "
+                        "(a flattened path is not representable in a streaming row)"
+                    )
+                    return
+            fields = [key_label] + list(value_fields)
+            self._w.write(f"## {format_key(name)} [?:]{{{_format_field_decl(fields)}}}\n")
+            self._current = {"name": name, "fields": fields, "count": 0}
+
     def write_row(self, values: Sequence[Any]) -> None:
         """Emit a single pipe-separated row immediately."""
         with self._lock:

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .scalar import format_scalar, format_key
+from .keyed_map import keyed_map_eligible
 
 
 @dataclass
@@ -30,6 +31,11 @@ def _encode_root_value(v: Any, out: list[str], opts: GenericOptions) -> None:
     if v is None:
         out.append("=-")
     elif isinstance(v, dict):
+        km = keyed_map_eligible(v)
+        if km is not None:
+            keys, values, value_fields, key_label = km
+            _encode_keyed_map("", False, keys, values, value_fields, key_label, out, 0, opts)
+            return
         _encode_object(v, out, 0, opts)
     elif isinstance(v, list):
         _encode_root_array(v, out, opts)
@@ -42,6 +48,11 @@ def _encode_object(d: dict, out: list[str], depth: int, opts: GenericOptions) ->
     for key, value in d.items():
         fk = format_key(key)
         if isinstance(value, dict):
+            km = keyed_map_eligible(value)
+            if km is not None:
+                keys, values, value_fields, key_label = km
+                _encode_keyed_map(key, True, keys, values, value_fields, key_label, out, depth, opts)
+                continue
             out.append(f"{prefix}## {fk}")
             _encode_object(value, out, depth + 1, opts)
         elif isinstance(value, list):
@@ -273,8 +284,53 @@ def _resolve_key_chain(item: Any, keys: list[str]) -> tuple[Any, bool]:
     return current, True
 
 
+# ── Keyed map encoding (SPEC 7.2a) ───────────────────────────────────────
+
+
+def _keyed_header_prefix(name: str, named: bool, depth: int) -> str:
+    """Build the keyed-table header prefix up to the count bracket. named
+    distinguishes an anonymous root keyed map (`## `) from a named member whose
+    name may itself be the empty string (`## ""`), which format_key quotes so it
+    round-trips as a distinct level rather than collapsing into the anonymous
+    root form (SPEC 7.2a.1)."""
+    prefix = _indent(depth)
+    if not named:
+        return f"{prefix}## "
+    return f"{prefix}## {format_key(name)} "
+
+
+def _encode_keyed_map(
+    name: str, named: bool, keys: list[str], values: list[Any],
+    value_fields: list[str], key_label: str, out: list[str], depth: int, opts: GenericOptions
+) -> None:
+    """Emit a keyed table for a map of objects. Routes through _encode_tabular
+    with the keyed bracket so nested-value handling (flatten/inline/attachment/
+    null/absent) is inherited unchanged. name is empty for a root/anonymous map."""
+    _encode_keyed_map_with_prefix(
+        _keyed_header_prefix(name, named, depth), keys, values,
+        value_fields, key_label, out, depth, opts,
+    )
+
+
+def _encode_keyed_map_with_prefix(
+    header_prefix: str, keys: list[str], values: list[Any],
+    value_fields: list[str], key_label: str, out: list[str], depth: int, opts: GenericOptions
+) -> None:
+    """Emit `<header_prefix>[N:]{...}` and the keyed rows, reusing _encode_tabular.
+    Each value object is augmented with the key column and encoded as a tabular
+    row; the key column is declared first."""
+    fields = [key_label] + value_fields
+    arr: list[dict] = []
+    for k, v in zip(keys, values):
+        aug = dict(v)
+        aug[key_label] = k
+        arr.append(aug)
+    _encode_tabular(header_prefix, arr, fields, out, depth, opts, keyed=True)
+
+
 def _encode_tabular(
-    header_prefix: str, arr: list[dict], fields: list[str], out: list[str], depth: int, opts: GenericOptions
+    header_prefix: str, arr: list[dict], fields: list[str], out: list[str], depth: int,
+    opts: GenericOptions, keyed: bool = False
 ) -> None:
     prefix = _indent(depth)
 
@@ -321,7 +377,8 @@ def _encode_tabular(
             shared_arr_schemas[f] = sas
 
     header_fields = ",".join(col["header"] for col in columns)
-    out.append(f"{header_prefix}[{len(arr)}]{{{header_fields}}}")
+    br = ":]" if keyed else "]"
+    out.append(f"{header_prefix}[{len(arr)}{br}{{{header_fields}}}")
 
     for i, item in enumerate(arr):
         cells: list[str] = []
@@ -402,8 +459,15 @@ def _encode_tabular(
                 else:
                     _encode_attachment_array(prefix, fk, att_val, out, depth + 2, opts)
             elif isinstance(att_val, dict):
-                out.append(f"{prefix}.{fk} {{}}")
-                _encode_object(att_val, out, depth + 2, opts)
+                km = keyed_map_eligible(att_val)
+                if km is not None:
+                    keys, values, value_fields, key_label = km
+                    _encode_keyed_map_with_prefix(
+                        f"{prefix}.{fk} ", keys, values, value_fields, key_label, out, depth + 2, opts,
+                    )
+                else:
+                    out.append(f"{prefix}.{fk} {{}}")
+                    _encode_object(att_val, out, depth + 2, opts)
             else:
                 # Scalar attachment (e.g. field names containing ">").
                 if att_val is None:
@@ -468,6 +532,13 @@ def _encode_expanded(header_prefix: str, arr: list, out: list[str], depth: int, 
     out.append(f"{header_prefix}[{len(arr)}]")
     for i, item in enumerate(arr):
         if isinstance(item, dict):
+            km = keyed_map_eligible(item)
+            if km is not None:
+                keys, values, value_fields, key_label = km
+                _encode_keyed_map_with_prefix(
+                    f"{prefix}@{i} ", keys, values, value_fields, key_label, out, depth + 1, opts,
+                )
+                continue
             out.append(f"{prefix}@{i} {{}}")
             _encode_object(item, out, depth + 1, opts)
         elif isinstance(item, list):

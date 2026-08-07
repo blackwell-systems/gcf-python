@@ -6,10 +6,13 @@ import math
 import re
 from typing import Any
 
-_JSON_NUMBER_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$")
+# \Z (end of string), not $, so a trailing newline does not count as the end:
+# in Python $ also matches just before a final \n, which would misclassify a
+# string like "5\n" as a number or "W\n" as a bare key and break round-trip.
+_JSON_NUMBER_RE = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?\Z")
 _NUMERIC_LIKE_RE = re.compile(r"^[+-]\.?\d|^\.\d|^0\d")
 _INLINE_ARRAY_RE = re.compile(r"\[[^\]]*\]\s*:")
-_BARE_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+_BARE_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*\Z")
 
 
 class _Missing:

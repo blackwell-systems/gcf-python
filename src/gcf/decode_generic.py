@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .decode import decode
+from .keyed_map import keyed_rows_to_map
 from .scalar import (
     parse_scalar, parse_quoted_string, split_respecting_quotes, split_field_decl,
     is_bare_key, MISSING, ATTACHMENT,
@@ -72,7 +73,7 @@ def decode_generic(input_text: str) -> Any:
         if trimmed.startswith("##! "):
             summary_line = trimmed
             continue
-        if trimmed.startswith("## ") and "[?]" in trimmed:
+        if trimmed.startswith("## ") and ("[?]" in trimmed or "[?:]" in trimmed):
             deferred_count += 1
         content_lines.append(line)
 
@@ -233,9 +234,23 @@ def _parse_array_from_header(
         raise ValueError("invalid_count")
     count_str = bp[1:close]
     after = bp[close + 1:]
+
+    # A keyed map is marked by `:` after the count inside the bracket (`[N:]`).
+    # The decoder reconstructs a JSON object, not an array (SPEC 7.2a.2).
+    keyed = count_str.endswith(":")
+    if keyed:
+        count_str = count_str[:-1]
+        if not after.startswith("{"):
+            raise ValueError("keyed_map: missing field declaration")
+
     count = -1
     if count_str != "?":
         count = _parse_count(count_str)
+
+    # A keyed map has at least one member; an empty object is encoded per
+    # Section 7.7, never as [0:] (SPEC 7.2a.4).
+    if keyed and count == 0:
+        raise ValueError("keyed_map: zero count [0:] is invalid (an empty object uses Section 7.7)")
 
     if count == 0 and not after.startswith("{") and not after.startswith(":"):
         return [], 1
@@ -259,6 +274,8 @@ def _parse_array_from_header(
         rows, consumed = _parse_tabular_body(lines, header_line + 1, depth, fields, count)
         if count >= 0 and len(rows) != count:
             raise ValueError(f"count_mismatch: declared {count}, got {len(rows)}")
+        if keyed:
+            return keyed_rows_to_map(rows, fields), consumed + 1
         return rows, consumed + 1
 
     items, consumed = _parse_expanded_body(lines, header_line + 1, depth)
@@ -745,7 +762,7 @@ def _validate_summary_counts(
     current_count = 0
     for line in content_lines:
         trimmed = line.lstrip()
-        if trimmed.startswith("## ") and "[?]" in trimmed:
+        if trimmed.startswith("## ") and ("[?]" in trimmed or "[?:]" in trimmed):
             if in_deferred:
                 actual_counts.append(current_count)
             in_deferred = True
