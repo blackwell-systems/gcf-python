@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from .scalar import format_scalar
+from .scalar import format_scalar, format_key
 from typing import Any, Sequence
 
 
@@ -29,13 +29,27 @@ class GenericStreamEncoder:
         self._lock = threading.Lock()
         self._sections: list[tuple[str, int]] = []
         self._current: dict[str, Any] | None = None
+        self._err: Exception | None = None
+        self._w.write("GCF profile=generic\n")
 
     def begin_array(self, name: str, fields: Sequence[str]) -> None:
         """Start a tabular array section with deferred count [?]."""
         with self._lock:
+            if self._err is not None:
+                return
             if self._current is not None:
                 self._end_array_locked()
-            self._w.write(f"## {name} [?]{{{','.join(fields)}}}\n")
+            # A streaming tabular row has only flat columns; a field name containing
+            # ">" is a flattened path the stream cannot represent (SPEC 8.3, 7.4.6).
+            # Record the error and surface it at close().
+            for f in fields:
+                if ">" in f:
+                    self._err = ValueError(
+                        f"streaming field name {f!r} contains '>' "
+                        "(a flattened path is not representable in a streaming row)"
+                    )
+                    return
+            self._w.write(f"## {format_key(name)} [?]{{{_format_field_decl(fields)}}}\n")
             self._current = {"name": name, "fields": list(fields), "count": 0}
 
     def write_row(self, values: Sequence[Any]) -> None:
@@ -71,8 +85,14 @@ class GenericStreamEncoder:
             self._w.write(f"{name}[{len(values)}]: {','.join(parts)}\n")
 
     def close(self) -> None:
-        """Emit the ##! summary trailer with final counts."""
+        """Emit the ##! summary trailer with final counts.
+
+        Raises any error recorded during encoding (e.g. a field name containing
+        ">", which is not representable in a flat streaming row per SPEC 8.3).
+        """
         with self._lock:
+            if self._err is not None:
+                raise self._err
             if self._current is not None:
                 self._end_array_locked()
             if not self._sections:
@@ -85,6 +105,14 @@ class GenericStreamEncoder:
             return
         self._sections.append((self._current["name"], self._current["count"]))
         self._current = None
+
+
+def _format_field_decl(fields: Sequence[str]) -> str:
+    """Quote each field name per Section 2.4 (via format_key), matching the
+    buffered tabular header. The streaming header previously joined field names
+    raw, so a name containing a delimiter or quote produced an invalid or
+    ambiguous field declaration (SPEC 8.3)."""
+    return ",".join(format_key(f) for f in fields)
 
 
 def _format_value(v: Any) -> str:
