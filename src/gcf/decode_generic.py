@@ -135,7 +135,7 @@ def _parse_object_body(
 
         if content.startswith("## "):
             hdr = content[3:]
-            bi = hdr.find(" [")
+            bi = _find_bracket_start(hdr)
             if bi >= 0:
                 name = _parse_key_from_header(hdr[:bi])
                 _check_dup(out, name)
@@ -282,6 +282,27 @@ def _parse_array_from_header(
     if count >= 0 and len(items) != count:
         raise ValueError(f"count_mismatch: declared {count}, got {len(items)}")
     return items, consumed + 1
+
+
+def _find_bracket_start(s: str) -> int:
+    # Find " [" (the named-array count bracket) that is OUTSIDE any quoted name,
+    # so a quoted section/key name containing " [" (e.g. `## "a [1] b"`) is not
+    # misread as a named-array header. Mirrors _find_closing_brace's quote tracking.
+    in_quote = False
+    escaped = False
+    for i, c in enumerate(s):
+        if escaped:
+            escaped = False
+            continue
+        if c == "\\" and in_quote:
+            escaped = True
+            continue
+        if c == '"':
+            in_quote = not in_quote
+            continue
+        if not in_quote and c == " " and i + 1 < len(s) and s[i + 1] == "[":
+            return i
+    return -1
 
 
 def _find_closing_brace(s: str) -> int:
