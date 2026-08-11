@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.5.3 (2026-08-10)
+
+- **Losslessness fix (spec v3.5.2, SPEC 2.3/2.4).** The number grammar and numeric-like classification now pin digits to ASCII `[0-9]`. Python's `re` compiles `\d` in Unicode mode (matching `\p{Nd}`), so a value like `1.٥` (ASCII `1`, `.`, U+0665) was treated as number-shaped: quoted on encode, and a bare `1.٥` decoded through `float()` to the number `1.5`. That diverged from the ASCII SDKs and silently turned a string into a number when decoding wire produced by another SDK. `\d` is replaced with `[0-9]`; such tokens stay strings and encode bare. Verified against new `scalar/029-031` and `decode/007` conformance fixtures and the cross-SDK differential fuzz.
+
 ## v2.5.2 (2026-08-09)
 
 - **Spec v3.5.1 conformance (SPEC 5, score-rounding errata).** SPEC 5 now pins the graph `score` two-decimal wire form to round-half-to-even on the exact IEEE-754 double, resolving a midpoint divergence in the JavaScript and Kotlin SDKs. This SDK's `f"{score:.2f}"` formatter already rounds half-to-even, so there is no behavior change; re-verified against the new `graph-encode/004_score_midpoint_rounding` conformance fixture.
