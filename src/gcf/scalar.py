@@ -93,6 +93,15 @@ def format_scalar(v: Any, delimiter: str = "") -> str:
     if isinstance(v, bool):
         return "true" if v else "false"
     if isinstance(v, int) and not isinstance(v, bool):
+        # The encoder enforces the int64 domain (SPEC 2.3.2): a Python int is
+        # arbitrary-precision, so a host integer outside int64 is rejected here
+        # rather than emitted as a bare token the decoder would reject.
+        if v < -(2**63) or v > 2**63 - 1:
+            raise ValueError(
+                f"out_of_range: integer {v} is outside the canonical int64 "
+                "domain [-9223372036854775808, 9223372036854775807]; "
+                "model larger values as strings (SPEC 2.3.2)"
+            )
         return str(v)
     if isinstance(v, float):
         return format_number(v)
@@ -111,7 +120,12 @@ def format_number(f: float) -> str:
         # Negative zero canonicalizes to 0 (SPEC 2.3.1): -0.0 equals 0.0 by value.
         return "0"
     a = abs(f)
-    if 1e-6 <= a < 1e21:
+    # Plain decimal only below 2^53. Every double at or above 2^53 is integer-valued,
+    # so a plain rendering would emit a bare-integer token: indistinguishable from an
+    # int64 on the wire and beyond the binary64 safe-integer range (2^53-1), so a
+    # JavaScript decoder rejects it under its default policy. Exponent shape keeps bare
+    # tokens int64 and decimal/exponent tokens doubles (SPEC 2.3.1). Ints format above.
+    if 1e-6 <= a < 2**53:
         # Use repr for shortest round-trippable form.
         s = repr(f)
         # If repr chose scientific notation, convert to plain decimal.
@@ -165,12 +179,20 @@ def parse_scalar(s: str, tabular_context: bool = False) -> Any:
     if s == "false":
         return False
     if _JSON_NUMBER_RE.match(s):
+        # Token shape follows domain (SPEC 2.3.2): a bare-integer literal (no
+        # fraction, no exponent) is an int64-domain integer parsed exactly, not
+        # routed through float(); a decimal or exponent literal is a double.
+        if "." not in s and "e" not in s and "E" not in s:
+            n = int(s)
+            if n < -(2**63) or n > 2**63 - 1:
+                raise ValueError(
+                    f"out_of_range: integer {s} is outside the canonical int64 "
+                    "domain [-9223372036854775808, 9223372036854775807]; "
+                    "model larger values as strings (SPEC 2.3.2)"
+                )
+            return n
         try:
-            f = float(s)
-            if "." not in s and "e" not in s and "E" not in s:
-                if abs(f) <= 2**53:
-                    return int(f)
-            return f
+            return float(s)
         except ValueError:
             pass
     return s

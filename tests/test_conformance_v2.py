@@ -183,6 +183,23 @@ def test_conformance(rel_path, data):
         with pytest.raises((ValueError, Exception)):
             decode_generic(data["input"])
 
+    elif op == "roundtrip-wire":
+        # Input and expected are wire strings: decode then re-encode and require the
+        # result to equal the input wire. The value never becomes a host number, so a
+        # value that a JSON parser would float (an integer beyond 2^53) is pinned here.
+        decoded = decode_generic(data["input"])
+        reencoded = encode_generic(decoded)
+        assert reencoded == data["expected"], (
+            f"wire idempotence mismatch:\n  got: {reencoded!r}\n  exp: {data['expected']!r}"
+        )
+
+    elif op == "encode-error":
+        # Input is a JSON value (encode-side) out of the numeric domain; encoding it
+        # must raise. In Python the JSON parser preserves big integers exactly, so the
+        # encoder is the domain-enforcement site.
+        with pytest.raises((ValueError, Exception)):
+            encode_generic(data["input"])
+
     elif op == "generic-pack-root":
         from gcf.generic_delta import GenericSet, generic_pack_root
 
