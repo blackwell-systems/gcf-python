@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.6.0 (2026-08-14)
+
+- **Numeric domain (spec v3.5.3, SPEC 2.3.2).** Specifies the canonical numeric domain as signed `int64` for integers and IEEE-754 double for non-integers. Earlier versions left integers beyond the double-exact range (2^53) to the host numeric type; this version parses integer literals to an exact `int64` on decode and on the JSON-to-value bridge, returns an out-of-range error for a value outside `int64` on both decode and encode, and models larger values (unsigned-64 identifiers, exact decimals) as strings. Canonical number formatting aligns to the domain: a double at or above 2^53 renders in exponent notation. Verified against new `numbers/017-024` and `errors-v2/041-042` conformance fixtures and the cross-SDK differential fuzz. An out-of-range value raises `ValueError`.
+
 ## v2.5.3 (2026-08-10)
 
 - **Losslessness fix (spec v3.5.2, SPEC 2.3/2.4).** The number grammar and numeric-like classification now pin digits to ASCII `[0-9]`. Python's `re` compiles `\d` in Unicode mode (matching `\p{Nd}`), so a value like `1.٥` (ASCII `1`, `.`, U+0665) was treated as number-shaped: quoted on encode, and a bare `1.٥` decoded through `float()` to the number `1.5`. That diverged from the ASCII SDKs and silently turned a string into a number when decoding wire produced by another SDK. `\d` is replaced with `[0-9]`; such tokens stay strings and encode bare. Verified against new `scalar/029-031` and `decode/007` conformance fixtures and the cross-SDK differential fuzz.
