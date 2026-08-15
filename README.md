@@ -219,6 +219,22 @@ for snapshot in stream:                   # each turn's current GenericSet
 
 `fixed_n(15)` re-anchors every N turns; `size_guard()` (recommended) re-anchors once the cumulative delta reaches a full payload's size. It introduces no new wire syntax and the decoder stays cadence-agnostic, so a re-anchor is just the protocol's "full" outcome on a schedule.
 
+## FastMCP middleware
+
+A drop-in middleware for [FastMCP](https://gofastmcp.com) servers that re-encodes JSON tool results as GCF, opt-in. It requires the `fastmcp` extra (the core package stays zero-dependency):
+
+```bash
+pip install "gcf-python[fastmcp]"
+```
+
+```python
+from gcf.fastmcp import GcfResponseMiddleware
+
+mcp.add_middleware(GcfResponseMiddleware())
+```
+
+When `RESPONSE_FORMAT=gcf` is set in the environment, each tool result whose model-facing content is a single JSON text block is returned as a GCF generic wire instead of JSON. It is opt-in (nothing changes unless the variable is set), lossless and fail-safe (on any encoding error the original result is returned), and non-destructive: only a lone JSON text block is re-encoded, and the tool's `structuredContent` is preserved so output-schema validation and non-model clients keep receiving JSON.
+
 ## API
 
 | Function | Description |
