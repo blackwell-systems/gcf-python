@@ -43,6 +43,7 @@ except ImportError as exc:  # pragma: no cover - exercised only without the extr
         'pip install "gcf-python[fastmcp]"'
     ) from exc
 
+from .decode_generic import decode_generic
 from .generic import encode_generic
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,10 @@ class GcfResponseMiddleware(Middleware):
 
         try:
             wire = encode_generic(payload)
+            # Verify the wire decodes back to the same value before shipping it, so a
+            # result is never replaced with an unparseable or lossy encoding.
+            if decode_generic(wire) != payload:
+                return result
         except Exception as exc:  # noqa: BLE001 - liveness over correctness of format
             logger.debug("GCF encoding skipped: %s", exc)
             return result

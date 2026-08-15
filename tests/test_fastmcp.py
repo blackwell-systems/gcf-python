@@ -5,6 +5,7 @@ Skipped cleanly when the 'fastmcp' extra is not installed.
 
 import asyncio
 import json
+import random
 from types import SimpleNamespace
 
 import pytest
@@ -117,3 +118,64 @@ def test_encode_error_falls_back_to_json():
     out = _run(GcfResponseMiddleware(enabled=True), result)
 
     assert _text(out) == text
+
+
+# --- fuzz: the safety invariant on arbitrary JSON ---
+
+# Characters that stress GCF's delimiter/quoting rules and unicode handling.
+_CHARS = "abc 0|,\"\\\n\t\r:{}[]<>é☕日本語—"
+
+
+def _rand_str(rng, lo=0, hi=12):
+    return "".join(rng.choice(_CHARS) for _ in range(rng.randint(lo, hi)))
+
+
+def _rand_scalar(rng):
+    kind = rng.randint(0, 5)
+    if kind == 0:
+        return rng.randint(-1_000_000, 1_000_000)
+    if kind == 1:
+        return rng.choice([True, False, None])
+    if kind == 2:
+        return round(rng.uniform(-1e6, 1e6), 4)
+    if kind == 3:
+        # occasionally an integer outside the int64 domain -> encode must decline safely
+        return rng.choice([2**63, -(2**63) - 1, 10**25])
+    return _rand_str(rng)
+
+
+def _rand_json(rng, depth=0):
+    if depth >= 4 or rng.random() < 0.35:
+        return _rand_scalar(rng)
+    kind = rng.randint(0, 2)
+    if kind == 0:
+        return [_rand_json(rng, depth + 1) for _ in range(rng.randint(0, 5))]
+    if kind == 1:
+        return {_rand_str(rng, 1, 8): _rand_json(rng, depth + 1) for _ in range(rng.randint(0, 5))}
+    # array of uniform records (GCF's favorable shape)
+    keys = [_rand_str(rng, 1, 6) for _ in range(rng.randint(1, 5))]
+    return [{k: _rand_json(rng, depth + 2) for k in keys} for _ in range(rng.randint(0, 8))]
+
+
+def test_fuzz_middleware_never_grows_corrupts_or_crashes():
+    rng = random.Random(20260815)
+    middleware = GcfResponseMiddleware(enabled=True)
+
+    for _ in range(5000):
+        payload = _rand_json(rng)
+        text = json.dumps(payload)
+        structured = payload if isinstance(payload, dict) else None
+        result = _result(TextContent(type="text", text=text), structured_content=structured)
+
+        out = _run(middleware, result)
+
+        # Always exactly one text block; never dropped or multiplied.
+        assert len(out.content) == 1
+        got = out.content[0].text
+
+        if got == text:
+            continue  # declined -> original JSON kept (always safe)
+
+        # Otherwise it MUST be a GCF wire that round-trips to the exact payload.
+        assert got.startswith("GCF profile=generic")
+        assert decode_generic(got) == payload

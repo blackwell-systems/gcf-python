@@ -171,7 +171,7 @@ def _parse_object_body(
 
         # Inline array (e.g. items[3]: a,b,c). Only reached if no = found.
         if not content.startswith("@") and not content.startswith("##"):
-            bracket_idx = content.find("[")
+            bracket_idx = _find_array_bracket(content)
             if bracket_idx > 0:
                 rest = content[bracket_idx:]
                 close_idx = rest.find("]")
@@ -194,6 +194,26 @@ def _parse_object_body(
             raise ValueError(f"orphan_inline_attachment: {content}")
         raise ValueError(f"invalid_line: unexpected content in object body: {content!r}")
     return i - start
+
+
+def _find_array_bracket(s: str) -> int:
+    """Index of the '[' that opens a named-array marker (``key[N]: ...``).
+
+    A quoted key is scanned first so a '[' inside the key name is not mistaken
+    for the array bracket (bare keys cannot contain '['). Returns -1 when the
+    key is a quoted string not immediately followed by '['.
+    """
+    if s and s[0] == '"':
+        i = 1
+        while i < len(s):
+            if s[i] == "\\":
+                i += 2
+                continue
+            if s[i] == '"':
+                return i + 1 if i + 1 < len(s) and s[i + 1] == "[" else -1
+            i += 1
+        return -1
+    return s.find("[")
 
 
 def _find_kv_split(s: str) -> int:
