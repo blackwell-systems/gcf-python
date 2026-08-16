@@ -120,6 +120,19 @@ def test_encode_error_falls_back_to_json():
     assert _text(out) == text
 
 
+def test_never_grow_keeps_json_when_gcf_larger():
+    # A tiny single-field object: GCF's header overhead exceeds the JSON, so the
+    # never-grow guard keeps the JSON rather than emit a larger wire.
+    data = {"ok": True}
+    text = json.dumps(data)
+    result = _result(TextContent(type="text", text=text), structured_content=data)
+
+    out = _run(GcfResponseMiddleware(enabled=True), result)
+
+    assert _text(out) == text
+    assert not _text(out).startswith("GCF ")
+
+
 # --- fuzz: the safety invariant on arbitrary JSON ---
 
 # Characters that stress GCF's delimiter/quoting rules and unicode handling.
@@ -176,6 +189,8 @@ def test_fuzz_middleware_never_grows_corrupts_or_crashes():
         if got == text:
             continue  # declined -> original JSON kept (always safe)
 
-        # Otherwise it MUST be a GCF wire that round-trips to the exact payload.
+        # Otherwise it MUST be a GCF wire that is smaller than the JSON (never-grow)
+        # and round-trips to the exact payload.
         assert got.startswith("GCF profile=generic")
+        assert len(got) < len(text)
         assert decode_generic(got) == payload

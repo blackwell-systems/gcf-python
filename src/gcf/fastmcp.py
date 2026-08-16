@@ -18,8 +18,11 @@ wire, so the response uses fewer tokens when it crosses the LLM boundary. It is:
 
 - **Opt-in** — nothing changes unless ``RESPONSE_FORMAT=gcf`` is set (or
   ``enabled=True`` is passed).
-- **Lossless and fail-safe** — on any encoding error the original result is
-  returned, so a tool call is never dropped over formatting.
+- **Never-grow** — GCF is used only when the wire is actually smaller than the
+  JSON it would replace; a small result is never enlarged.
+- **Lossless and fail-safe** — the wire must decode back to the same value, and
+  on any encoding error the original result is returned, so a tool call is never
+  grown, dropped, or garbled over formatting.
 - **Non-destructive** — only a lone JSON text block is re-encoded; a result
   carrying an image or any second block is left untouched, and the tool's
   ``structuredContent`` (if any) is preserved so output-schema validation and
@@ -94,8 +97,16 @@ class GcfResponseMiddleware(Middleware):
         if payload is None:
             return result
 
+        # _json_payload guarantees exactly one text block, so this is the JSON text
+        # the client would otherwise receive.
+        original = result.content[0].text
+
         try:
             wire = encode_generic(payload)
+            # Never-grow: only replace the JSON when GCF is actually smaller, so a
+            # small result is never enlarged.
+            if len(wire) >= len(original):
+                return result
             # Verify the wire decodes back to the same value before shipping it, so a
             # result is never replaced with an unparseable or lossy encoding.
             if decode_generic(wire) != payload:

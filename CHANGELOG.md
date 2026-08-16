@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.7.1 (2026-08-16)
+
+- gcf.fastmcp: the response middleware now uses GCF only when the wire is smaller than the JSON it replaces (never-grow), so a small tool result is never enlarged.
+
 ## v2.7.0 (2026-08-15)
 
 - Decode: quoted-key/array-value round-trip (SPEC 4.2).
