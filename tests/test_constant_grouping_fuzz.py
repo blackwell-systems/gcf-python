@@ -32,6 +32,7 @@ HAZARD_STRINGS = [
     "group=dept", "group=", "region=us-east", "= [1]", "k=v [1]",
     "dept=Sales [2]", "}", "{a}", "[2]", "[2:]", "[0]", "[?]",
     "## section", ".field", "@id", "@0", "a|b", "-", "~",
+    "^", "^{abc", "^{a}", "^{", "^x", "^{a,b}",
 ]
 
 COLLISION_STRINGS = [

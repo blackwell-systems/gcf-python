@@ -127,7 +127,11 @@ def parse_const_value(tok: str) -> Any:
         raise ValueError("invalid_const_value: empty constant value (the empty string is always quoted)")
     if tok == "~":
         raise ValueError("invalid_const_value: absent marker ~ is not valid in a field declaration")
-    if tok == "^" or (len(tok) >= 2 and tok[0] == "^" and tok[1] == "{"):
+    # Reject only a complete attachment marker, mirroring the encoder's Section 2.4
+    # quoting predicate (bare "^", or "^{...}" ending in "}"). A "^{"-prefixed token with
+    # no closing "}" (e.g. "^{abc") is a literal string the encoder leaves bare, so the
+    # decoder must accept it as a scalar.
+    if tok == "^" or (len(tok) >= 3 and tok[0] == "^" and tok[1] == "{" and tok[-1] == "}"):
         raise ValueError("invalid_const_value: attachment marker is not a scalar")
     return parse_scalar(tok, tabular_context=False)
 
@@ -380,7 +384,10 @@ def decode_grouped_array(lines, header_line, depth, entries, group_clause, count
             bare_vals: dict[str, Any] = {}
             for j, f in enumerate(bare_fields):
                 cell = cells[j]
-                if cell == "^" or (len(cell) >= 2 and cell[0] == "^" and cell[1] == "{"):
+                # Only a complete attachment marker (bare "^" or "^{...}" ending in "}")
+                # is forbidden; a "^{"-prefixed cell without a closing "}" is a literal
+                # row scalar, not an attachment.
+                if cell == "^" or (len(cell) >= 3 and cell[0] == "^" and cell[1] == "{" and cell[-1] == "}"):
                     raise ValueError("invalid_group_header: grouped records must not carry attachments")
                 pv = parse_scalar(cell, tabular_context=True)
                 if pv is MISSING:
