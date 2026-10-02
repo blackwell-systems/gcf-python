@@ -6,6 +6,11 @@ from typing import Any
 
 from .decode import decode
 from .keyed_map import keyed_rows_to_map
+from .constant_grouping import (
+    decode_constant_array,
+    decode_grouped_array,
+    parse_field_entries,
+)
 from .scalar import (
     parse_scalar, parse_quoted_string, split_respecting_quotes, split_field_decl,
     is_bare_key, MISSING, ATTACHMENT,
@@ -297,7 +302,36 @@ def _parse_array_from_header(
         brace_end = _find_closing_brace(after)
         if brace_end < 0:
             raise ValueError("invalid field declaration")
-        fields = split_field_decl(after[:brace_end + 1])
+        decl_str = after[:brace_end + 1]
+        group_clause = after[brace_end + 1:].strip()
+
+        # Value-grouping (SPEC 7.4.8): non-keyed tabular array with a group= clause.
+        if not keyed and group_clause.startswith("group="):
+            entries = parse_field_entries(decl_str)
+            return decode_grouped_array(lines, header_line, depth, entries, group_clause, count)
+        if group_clause:
+            raise ValueError(f"malformed_header_field: unexpected content after field declaration: {group_clause}")
+
+        # Constant-column factoring (SPEC 7.4.7): a non-keyed tabular array whose field
+        # declaration carries name=value entries (or a stray @, which is valid only with
+        # a group= clause). The common case (no "=" or "@") takes the plain path.
+        if not keyed and ("=" in decl_str or "@" in decl_str):
+            entries = parse_field_entries(decl_str)
+            has_const = False
+            for e in entries:
+                if e.is_key:
+                    raise ValueError(
+                        f"invalid field name: @{e.name} (an @ key column is valid only in a grouped section)"
+                    )
+                if e.is_const:
+                    has_const = True
+            if has_const:
+                return decode_constant_array(
+                    lines, header_line, depth, entries, count, _parse_tabular_body
+                )
+            # No constants after all (e.g. a quoted name containing "="): plain path.
+
+        fields = split_field_decl(decl_str)
         rows, consumed = _parse_tabular_body(lines, header_line + 1, depth, fields, count)
         if count >= 0 and len(rows) != count:
             raise ValueError(f"count_mismatch: declared {count}, got {len(rows)}")

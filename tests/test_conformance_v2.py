@@ -178,10 +178,14 @@ def test_conformance(rel_path, data):
         ), f"round-trip mismatch:\n  input:   {data['input']}\n  decoded: {decoded}"
 
     elif op == "error":
-        # v3 decoder may surface different error categories for same invalid input.
-        # The requirement is that it rejects.
-        with pytest.raises((ValueError, Exception)):
+        # The decoder must reject. When the fixture pins an error category, the raised
+        # message must contain it (mirrors the Go reference runner's substring match).
+        with pytest.raises((ValueError, Exception)) as ei:
             decode_generic(data["input"])
+        if data.get("expectedError"):
+            assert data["expectedError"] in str(ei.value), (
+                f"wrong error category:\n  got:      {ei.value}\n  expected: {data['expectedError']}"
+            )
 
     elif op == "roundtrip-wire":
         # Input and expected are wire strings: decode then re-encode and require the

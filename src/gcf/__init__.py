@@ -39,6 +39,7 @@ from .decode import DecodeError, decode
 from .delta import decode_delta, encode_delta, verify_delta
 from .encode import encode
 from .generic import encode_generic, GenericOptions
+from .constant_grouping import encode_generic_grouped
 from .generic_delta import (
     GenericSet,
     GenericDeltaPayload,
@@ -82,6 +83,7 @@ __all__ = [
     "encode_delta",
     "verify_delta",
     "encode_generic",
+    "encode_generic_grouped",
     "GenericOptions",
     "encode_with_session",
     "GenericSet",

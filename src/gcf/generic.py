@@ -7,6 +7,7 @@ from typing import Any
 
 from .scalar import format_scalar, format_key
 from .keyed_map import keyed_map_eligible
+from .constant_grouping import format_const_value
 
 
 @dataclass
@@ -71,7 +72,7 @@ def _encode_root_array(arr: list, out: list[str], opts: GenericOptions) -> None:
         return
     fields = _tabular_fields(arr)
     if fields is not None:
-        _encode_tabular("## ", arr, fields, out, 0, opts)
+        _encode_tabular("## ", arr, fields, out, 0, opts, factor_const=True)
         return
     _encode_expanded("## ", arr, out, 0, opts)
 
@@ -87,7 +88,7 @@ def _encode_named_array(name: str, arr: list, out: list[str], depth: int, opts: 
         return
     fields = _tabular_fields(arr)
     if fields is not None:
-        _encode_tabular(f"{prefix}## {name} ", arr, fields, out, depth, opts)
+        _encode_tabular(f"{prefix}## {name} ", arr, fields, out, depth, opts, factor_const=True)
         return
     _encode_expanded(f"{prefix}## {name} ", arr, out, depth, opts)
 
@@ -330,7 +331,7 @@ def _encode_keyed_map_with_prefix(
 
 def _encode_tabular(
     header_prefix: str, arr: list[dict], fields: list[str], out: list[str], depth: int,
-    opts: GenericOptions, keyed: bool = False
+    opts: GenericOptions, keyed: bool = False, factor_const: bool = False
 ) -> None:
     prefix = _indent(depth)
 
@@ -376,7 +377,48 @@ def _encode_tabular(
         if sas is not None:
             shared_arr_schemas[f] = sas
 
-    header_fields = ",".join(col["header"] for col in columns)
+    # Constant-column factoring (SPEC 7.4.7): a plain scalar column identical across
+    # every record is declared once in the header as name=value and omitted from the
+    # rows. Mandatory canonical for top-level tabular arrays, gated off for keyed maps
+    # and the nested-attachment path (factor_const). At least one per-record column
+    # remains.
+    const_col = [False] * len(columns)
+    const_header_val = [""] * len(columns)
+    if factor_const and not keyed and len(arr) >= 2:
+        for j, col in enumerate(columns):
+            if col["type"] != "original":
+                continue  # only plain scalar columns qualify, never flattened/attachment
+            first = ""
+            first_set = False
+            is_const = True
+            for item in arr:
+                f = col["field"]
+                if f not in item:
+                    is_const = False
+                    break
+                v = item[f]
+                if isinstance(v, (dict, list)):
+                    is_const = False
+                    break
+                cv = format_const_value(v)
+                if not first_set:
+                    first = cv
+                    first_set = True
+                elif cv != first:
+                    is_const = False
+                    break
+            if is_const:
+                const_col[j] = True
+                const_header_val[j] = first
+        # At least one per-record column MUST remain. If every column is constant
+        # (an array of identical objects), leave the last union field unfactored.
+        if not any(not c for c in const_col):
+            const_col[len(columns) - 1] = False
+
+    header_fields = ",".join(
+        (col["header"] + "=" + const_header_val[i]) if const_col[i] else col["header"]
+        for i, col in enumerate(columns)
+    )
     br = ":]" if keyed else "]"
     out.append(f"{header_prefix}[{len(arr)}{br}{{{header_fields}}}")
 
@@ -437,7 +479,9 @@ def _encode_tabular(
             row_has_attachment = True
             attachments.append((f, item[f], False, None))
 
-        row = "|".join(cells)
+        # Omit constant columns from the per-row cells (SPEC 7.4.7.3).
+        row_cells = [cells[j] for j in range(len(cells)) if not const_col[j]]
+        row = "|".join(row_cells)
         if row_has_attachment:
             out.append(f"{prefix}@{i} {row}")
         else:
