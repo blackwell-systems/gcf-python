@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.8.0 (2026-10-02)
+
+### Spec v3.6.0: constant-column factoring and value-grouping
+
+- Constant-column factoring (SPEC 7.4.7): a column holding the same scalar in every record of a top-level tabular array is declared once in the header as `name=value` and omitted from the rows. Mandatory in the default encode path; decode support is universal (any tabular position).
+- Value-grouping (SPEC 7.4.8): opt-in `encode_generic_grouped(data, key_field, group_field)` clusters a keyed set by one low-cardinality column, with an `@`-marked unique key column, a `group=<col>` header clause, and per-group `<col>=<value> [count]` subheaders. Decode support is mandatory.
+- A `^{`-prefixed constant or grouped value with no closing `}` (e.g. `^{abc`) is a literal string: the attachment-marker reject matches only a complete marker (bare `^` or `^{...}` ending in `}`).
+
 ## v2.7.1 (2026-08-16)
 
 - gcf.fastmcp: the response middleware now uses GCF only when the wire is smaller than the JSON it replaces (never-grow), so a small tool result is never enlarged.
